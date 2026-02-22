@@ -1,14 +1,39 @@
 /**
  * Jellyfin Source Driver
- * 
+ *
  * Implements the SourceDriver interface for Jellyfin servers.
  * Provides paging support for all list endpoints.
  */
 
 import { Platform } from 'react-native';
-import { SourceDriver } from '../types';
-import type { SourceInfo, ListParams, Artist, Album, Track, Playlist, SearchFilter, SearchResultItem, CodecMetadata, Lyrics, StreamOptions, DownloadOptions, DownloadInfo } from '../types';
-import type { JellyfinAlbum, JellyfinTrack, JellyfinItemsResponse, DeviceMap, TrackOptionsOsOverrides } from './types';
+import { SourceDriver } from '../../types';
+import type {
+    SourceInfo,
+    ListParams,
+    ListResult,
+    Artist,
+    Album,
+    Track,
+    Playlist,
+    SearchFilter,
+    SearchResultItem,
+    CodecMetadata,
+    Lyrics,
+    StreamOptions,
+    DownloadOptions,
+    DownloadInfo,
+} from '../../types';
+import type {
+    JellyfinAlbum,
+    JellyfinTrack,
+    JellyfinItemsResponse,
+    JellyfinArtist,
+    JellyfinPlaylist,
+    JellyfinSearchResult,
+    JellyfinSystemInfo,
+    DeviceMap,
+    TrackOptionsOsOverrides,
+} from './types';
 import { APP_VERSION } from '@/CONSTANTS';
 
 /** Map the output of `Platform.OS`, so that Jellyfin can understand it. */
@@ -21,6 +46,15 @@ const deviceMap: DeviceMap = {
 };
 
 const DEFAULT_LIMIT = 500;
+
+/** Base query params shared across all browsable list endpoints */
+const BASE_QUERY_PARAMS = {
+    SortBy: 'SortName',
+    SortOrder: 'Ascending',
+    Recursive: 'true',
+    ImageTypeLimit: '1',
+    EnableImageTypes: 'Primary,Backdrop,Banner,Thumb',
+} as const;
 
 export class JellyfinDriver extends SourceDriver {
     /**
@@ -37,7 +71,7 @@ export class JellyfinDriver extends SourceDriver {
    */
     private async fetch<T>(path: string, config?: RequestInit): Promise<T> {
         const url = `${this.source.uri}${path.startsWith('/') ? '' : '/'}${path}`;
-    
+
         const response = await fetch(url, {
             ...config,
             headers: {
@@ -66,13 +100,8 @@ export class JellyfinDriver extends SourceDriver {
    * Connect to the Jellyfin server
    */
     async connect(): Promise<SourceInfo> {
-        const data = await this.fetch<{
-      Id: string;
-      ServerName: string;
-      Version: string;
-      OperatingSystem: string;
-    }>('/System/Info');
-    
+        const data = await this.fetch<JellyfinSystemInfo>('/System/Info');
+
         return {
             id: data.Id,
             name: data.ServerName,
@@ -84,51 +113,46 @@ export class JellyfinDriver extends SourceDriver {
     /**
    * Get artists with paging
    */
-    async getArtists(params?: ListParams): Promise<Artist[]> {
+    async getArtists(params?: ListParams): Promise<ListResult<Artist>> {
         const offset = params?.offset || 0;
         const limit = params?.limit || DEFAULT_LIMIT;
 
         const queryParams = new URLSearchParams({
-            SortBy: 'SortName',
-            SortOrder: 'Ascending',
-            Recursive: 'true',
+            ...BASE_QUERY_PARAMS,
             Fields: 'PrimaryImageAspectRatio,SortName,BasicSyncInfo,DateCreated,Overview',
-            ImageTypeLimit: '1',
-            EnableImageTypes: 'Primary,Backdrop,Banner,Thumb',
             StartIndex: offset.toString(),
             Limit: limit.toString(),
         });
 
-        const response = await this.fetch<{ Items: Array<{
-      Id: string;
-      Name: string;
-      IsFolder: boolean;
-      [key: string]: unknown;
-    }> }>(`/Artists/AlbumArtists?${queryParams}`);
-    
-        return response.Items.map(item => ({
-            id: item.Id,
-            name: item.Name,
-            isFolder: item.IsFolder || false,
-            metadataJson: JSON.stringify(item),
-        }));
+        const response = await this.fetch<JellyfinItemsResponse<JellyfinArtist>>(
+            `/Artists/AlbumArtists?${queryParams}`
+        );
+
+        return {
+            items: response.Items.map(item => ({
+                id: item.Id,
+                name: item.Name,
+                isFolder: item.IsFolder || false,
+                metadataJson: JSON.stringify(item),
+            })),
+            total: response.TotalRecordCount,
+            offset,
+            limit,
+        };
     }
 
     /**
    * Get albums with paging
    */
-    async getAlbums(params?: ListParams): Promise<Album[]> {
+    async getAlbums(params?: ListParams): Promise<ListResult<Album>> {
         const offset = params?.offset || 0;
         const limit = params?.limit || DEFAULT_LIMIT;
 
         const queryParams = new URLSearchParams({
+            ...BASE_QUERY_PARAMS,
             SortBy: 'AlbumArtist,SortName',
-            SortOrder: 'Ascending',
             IncludeItemTypes: 'MusicAlbum',
-            Recursive: 'true',
             Fields: 'PrimaryImageAspectRatio,SortName,BasicSyncInfo,DateCreated',
-            ImageTypeLimit: '1',
-            EnableImageTypes: 'Primary,Backdrop,Banner,Thumb',
             StartIndex: offset.toString(),
             Limit: limit.toString(),
         });
@@ -137,21 +161,26 @@ export class JellyfinDriver extends SourceDriver {
             `/Users/${this.source.userId}/Items?${queryParams}`
         );
 
-        return response.Items.map(item => ({
-            id: item.Id,
-            name: item.Name,
-            productionYear: item.ProductionYear ?? null,
-            isFolder: item.IsFolder || false,
-            albumArtist: item.AlbumArtist ?? null,
-            dateCreated: item.DateCreated ? new Date(item.DateCreated).getTime() : null,
-            metadataJson: JSON.stringify(item),
-            artistItems: item.ArtistItems?.map(artist => ({
-                id: artist.Id,
-                name: artist.Name,
-                isFolder: artist.IsFolder,
-                metadataJson: JSON.stringify(artist),
-            })) || [],
-        }));
+        return {
+            items: response.Items.map(item => ({
+                id: item.Id,
+                name: item.Name,
+                productionYear: item.ProductionYear ?? null,
+                isFolder: item.IsFolder || false,
+                albumArtist: item.AlbumArtist ?? null,
+                dateCreated: item.DateCreated ? new Date(item.DateCreated).getTime() : null,
+                metadataJson: JSON.stringify(item),
+                artistItems: item.ArtistItems?.map(artist => ({
+                    id: artist.Id,
+                    name: artist.Name,
+                    isFolder: artist.IsFolder,
+                    metadataJson: JSON.stringify(artist),
+                })) || [],
+            })),
+            total: response.TotalRecordCount,
+            offset,
+            limit,
+        };
     }
 
     /**
@@ -161,7 +190,7 @@ export class JellyfinDriver extends SourceDriver {
         const item = await this.fetch<JellyfinAlbum>(
             `/Users/${this.source.userId}/Items/${albumId}`
         );
-    
+
         return {
             id: item.Id,
             name: item.Name,
@@ -182,7 +211,7 @@ export class JellyfinDriver extends SourceDriver {
     /**
    * Get tracks for an album with paging
    */
-    async getTracksByAlbum(albumId: string, params?: ListParams): Promise<Track[]> {
+    async getTracksByAlbum(albumId: string, params?: ListParams): Promise<ListResult<Track>> {
         const offset = params?.offset || 0;
         const limit = params?.limit || DEFAULT_LIMIT;
 
@@ -198,76 +227,72 @@ export class JellyfinDriver extends SourceDriver {
             `/Users/${this.source.userId}/Items?${queryParams}`
         );
 
-        return response.Items.map(item => ({
-            id: item.Id,
-            name: item.Name,
-            albumId: item.AlbumId ?? null,
-            album: item.Album ?? null,
-            albumArtist: item.AlbumArtist ?? null,
-            productionYear: item.ProductionYear ?? null,
-            indexNumber: item.IndexNumber ?? null,
-            parentIndexNumber: item.ParentIndexNumber ?? null,
-            runTimeTicks: item.RunTimeTicks ?? null,
-            metadataJson: JSON.stringify(item),
-            artistItems: item.ArtistItems?.map(artist => ({
-                id: artist.Id,
-                name: artist.Name,
-                isFolder: artist.IsFolder,
-                metadataJson: JSON.stringify(artist),
-            })) || [],
-        }));
+        return {
+            items: response.Items.map(item => ({
+                id: item.Id,
+                name: item.Name,
+                albumId: item.AlbumId ?? null,
+                album: item.Album ?? null,
+                albumArtist: item.AlbumArtist ?? null,
+                productionYear: item.ProductionYear ?? null,
+                indexNumber: item.IndexNumber ?? null,
+                parentIndexNumber: item.ParentIndexNumber ?? null,
+                runTimeTicks: item.RunTimeTicks ?? null,
+                metadataJson: JSON.stringify(item),
+                artistItems: item.ArtistItems?.map(artist => ({
+                    id: artist.Id,
+                    name: artist.Name,
+                    isFolder: artist.IsFolder,
+                    metadataJson: JSON.stringify(artist),
+                })) || [],
+            })),
+            total: response.TotalRecordCount,
+            offset,
+            limit,
+        };
     }
 
     /**
    * Get playlists with paging
    */
-    async getPlaylists(params?: ListParams): Promise<Playlist[]> {
+    async getPlaylists(params?: ListParams): Promise<ListResult<Playlist>> {
         const offset = params?.offset || 0;
         const limit = params?.limit || DEFAULT_LIMIT;
 
         const queryParams = new URLSearchParams({
-            SortBy: 'SortName',
-            SortOrder: 'Ascending',
+            ...BASE_QUERY_PARAMS,
             IncludeItemTypes: 'Playlist',
-            Recursive: 'true',
             Fields: 'PrimaryImageAspectRatio,SortName,BasicSyncInfo,DateCreated,ChildCount',
-            ImageTypeLimit: '1',
-            EnableImageTypes: 'Primary,Backdrop,Banner,Thumb',
             StartIndex: offset.toString(),
             Limit: limit.toString(),
         });
 
-        const response = await this.fetch<{ Items: Array<{
-      Id: string;
-      Name: string;
-      CanDelete: boolean;
-      ChildCount?: number;
-      [key: string]: unknown;
-    }> }>(
-        `/Users/${this.source.userId}/Items?${queryParams}`
-    );
+        const response = await this.fetch<JellyfinItemsResponse<JellyfinPlaylist>>(
+            `/Users/${this.source.userId}/Items?${queryParams}`
+        );
 
-        return response.Items.map(item => ({
-            id: item.Id,
-            name: item.Name,
-            canDelete: item.CanDelete || false,
-            childCount: item.ChildCount ?? null,
-            metadataJson: JSON.stringify(item),
-        }));
+        return {
+            items: response.Items.map(item => ({
+                id: item.Id,
+                name: item.Name,
+                canDelete: item.CanDelete || false,
+                childCount: item.ChildCount ?? null,
+                metadataJson: JSON.stringify(item),
+            })),
+            total: response.TotalRecordCount,
+            offset,
+            limit,
+        };
     }
 
     /**
    * Get a specific playlist
    */
     async getPlaylist(playlistId: string): Promise<Playlist> {
-        const item = await this.fetch<{
-      Id: string;
-      Name: string;
-      CanDelete: boolean;
-      ChildCount?: number;
-      [key: string]: unknown;
-    }>(`/Users/${this.source.userId}/Items/${playlistId}`);
-    
+        const item = await this.fetch<JellyfinPlaylist>(
+            `/Users/${this.source.userId}/Items/${playlistId}`
+        );
+
         return {
             id: item.Id,
             name: item.Name,
@@ -280,7 +305,7 @@ export class JellyfinDriver extends SourceDriver {
     /**
    * Get tracks for a playlist with paging
    */
-    async getTracksByPlaylist(playlistId: string, params?: ListParams): Promise<Track[]> {
+    async getTracksByPlaylist(playlistId: string, params?: ListParams): Promise<ListResult<Track>> {
         const offset = params?.offset || 0;
         const limit = params?.limit || DEFAULT_LIMIT;
 
@@ -291,44 +316,33 @@ export class JellyfinDriver extends SourceDriver {
             Limit: limit.toString(),
         });
 
-        const response = await this.fetch<{ Items: Array<{
-      Id: string;
-      Name: string;
-      AlbumId?: string;
-      Album?: string;
-      AlbumArtist?: string;
-      ProductionYear?: number;
-      IndexNumber?: number;
-      ParentIndexNumber?: number;
-      RunTimeTicks?: number;
-      ArtistItems?: Array<{
-        Id: string;
-        Name: string;
-        IsFolder: boolean;
-      }>;
-      [key: string]: unknown;
-    }> }>(
-        `/Playlists/${playlistId}/Items?${queryParams}`
-    );
+        const response = await this.fetch<JellyfinItemsResponse<JellyfinTrack>>(
+            `/Playlists/${playlistId}/Items?${queryParams}`
+        );
 
-        return response.Items.map(item => ({
-            id: item.Id,
-            name: item.Name,
-            albumId: item.AlbumId ?? null,
-            album: item.Album ?? null,
-            albumArtist: item.AlbumArtist ?? null,
-            productionYear: item.ProductionYear ?? null,
-            indexNumber: item.IndexNumber ?? null,
-            parentIndexNumber: item.ParentIndexNumber ?? null,
-            runTimeTicks: item.RunTimeTicks ?? null,
-            metadataJson: JSON.stringify(item),
-            artistItems: item.ArtistItems?.map(artist => ({
-                id: artist.Id,
-                name: artist.Name,
-                isFolder: artist.IsFolder,
-                metadataJson: JSON.stringify(artist),
-            })) || [],
-        }));
+        return {
+            items: response.Items.map(item => ({
+                id: item.Id,
+                name: item.Name,
+                albumId: item.AlbumId ?? null,
+                album: item.Album ?? null,
+                albumArtist: item.AlbumArtist ?? null,
+                productionYear: item.ProductionYear ?? null,
+                indexNumber: item.IndexNumber ?? null,
+                parentIndexNumber: item.ParentIndexNumber ?? null,
+                runTimeTicks: item.RunTimeTicks ?? null,
+                metadataJson: JSON.stringify(item),
+                artistItems: item.ArtistItems?.map(artist => ({
+                    id: artist.Id,
+                    name: artist.Name,
+                    isFolder: artist.IsFolder,
+                    metadataJson: JSON.stringify(artist),
+                })) || [],
+            })),
+            total: response.TotalRecordCount,
+            offset,
+            limit,
+        };
     }
 
     /**
@@ -338,94 +352,83 @@ export class JellyfinDriver extends SourceDriver {
         query: string,
         _filters: SearchFilter[],
         params?: ListParams
-    ): Promise<SearchResultItem[]> {
+    ): Promise<ListResult<SearchResultItem>> {
         const offset = params?.offset || 0;
         const limit = params?.limit || DEFAULT_LIMIT;
 
         const queryParams = new URLSearchParams({
-            IncludeItemTypes: 'Audio,MusicAlbum,Playlist',
+            ...BASE_QUERY_PARAMS,
             SortBy: 'SearchScore,Album,SortName',
-            SortOrder: 'Ascending',
-            Recursive: 'true',
+            IncludeItemTypes: 'Audio,MusicAlbum,Playlist',
             Fields: 'PrimaryImageAspectRatio,SortName,BasicSyncInfo,DateCreated,Overview',
-            ImageTypeLimit: '1',
-            EnableImageTypes: 'Primary,Backdrop,Banner,Thumb',
             SearchTerm: query,
             StartIndex: offset.toString(),
             Limit: limit.toString(),
         });
 
-        const response = await this.fetch<{ Items: Array<{
-      Id: string;
-      Name: string;
-      Type: string;
-      [key: string]: unknown;
-    }> }>(
-        `/Users/${this.source.userId}/Items?${queryParams}`
-    );
+        const response = await this.fetch<JellyfinItemsResponse<JellyfinSearchResult>>(
+            `/Users/${this.source.userId}/Items?${queryParams}`
+        );
 
-        return response.Items.map(item => ({
-            id: item.Id,
-            name: item.Name,
-            type: item.Type === 'MusicAlbum' ? 'albums' : item.Type === 'Audio' ? 'tracks' : 'playlists',
-        })) as SearchResultItem[];
+        return {
+            items: response.Items.map(item => ({
+                id: item.Id,
+                name: item.Name,
+                type: item.Type === 'MusicAlbum' ? 'albums' : item.Type === 'Audio' ? 'tracks' : 'playlists',
+            })) as SearchResultItem[],
+            total: response.TotalRecordCount,
+            offset,
+            limit,
+        };
     }
 
     /**
    * Get recent albums
    */
-    async getRecentAlbums(params?: ListParams): Promise<Album[]> {
+    async getRecentAlbums(params?: ListParams): Promise<ListResult<Album>> {
         const offset = params?.offset || 0;
         const limit = params?.limit || DEFAULT_LIMIT;
 
         const queryParams = new URLSearchParams({
+            ...BASE_QUERY_PARAMS,
+            SortBy: 'DateCreated',
+            SortOrder: 'Descending',
             IncludeItemTypes: 'MusicAlbum',
             Fields: 'DateCreated',
-            SortOrder: 'Descending',
-            SortBy: 'DateCreated',
-            Recursive: 'true',
             StartIndex: offset.toString(),
             Limit: limit.toString(),
         });
 
-        const response = await this.fetch<{ Items: Array<{
-      Id: string;
-      Name: string;
-      ProductionYear?: number;
-      IsFolder: boolean;
-      AlbumArtist?: string;
-      DateCreated?: string;
-      ArtistItems?: Array<{
-        Id: string;
-        Name: string;
-        IsFolder: boolean;
-      }>;
-      [key: string]: unknown;
-    }> }>(
-        `/Users/${this.source.userId}/Items?${queryParams}`
-    );
+        const response = await this.fetch<JellyfinItemsResponse<JellyfinAlbum>>(
+            `/Users/${this.source.userId}/Items?${queryParams}`
+        );
 
-        return response.Items.map(item => ({
-            id: item.Id,
-            name: item.Name,
-            productionYear: item.ProductionYear ?? null,
-            isFolder: item.IsFolder || false,
-            albumArtist: item.AlbumArtist ?? null,
-            dateCreated: item.DateCreated ? new Date(item.DateCreated).getTime() : null,
-            metadataJson: JSON.stringify(item),
-            artistItems: item.ArtistItems?.map(artist => ({
-                id: artist.Id,
-                name: artist.Name,
-                isFolder: artist.IsFolder,
-                metadataJson: JSON.stringify(artist),
-            })) || [],
-        }));
+        return {
+            items: response.Items.map(item => ({
+                id: item.Id,
+                name: item.Name,
+                productionYear: item.ProductionYear ?? null,
+                isFolder: item.IsFolder || false,
+                albumArtist: item.AlbumArtist ?? null,
+                dateCreated: item.DateCreated ? new Date(item.DateCreated).getTime() : null,
+                metadataJson: JSON.stringify(item),
+                artistItems: item.ArtistItems?.map(artist => ({
+                    id: artist.Id,
+                    name: artist.Name,
+                    isFolder: artist.IsFolder,
+                    metadataJson: JSON.stringify(artist),
+                })) || [],
+            })),
+            total: response.TotalRecordCount,
+            offset,
+            limit,
+        };
     }
 
     /**
    * Get similar albums
    */
-    async getSimilarAlbums(albumId: string, params?: ListParams): Promise<Album[]> {
+    async getSimilarAlbums(albumId: string, params?: ListParams): Promise<ListResult<Album>> {
         const offset = params?.offset || 0;
         const limit = params?.limit || DEFAULT_LIMIT;
 
@@ -435,44 +438,36 @@ export class JellyfinDriver extends SourceDriver {
             Limit: limit.toString(),
         });
 
-        const response = await this.fetch<{ Items: Array<{
-      Id: string;
-      Name: string;
-      ProductionYear?: number;
-      IsFolder: boolean;
-      AlbumArtist?: string;
-      DateCreated?: string;
-      ArtistItems?: Array<{
-        Id: string;
-        Name: string;
-        IsFolder: boolean;
-      }>;
-      [key: string]: unknown;
-    }> }>(
-        `/Items/${albumId}/Similar?${queryParams}`
-    );
+        const response = await this.fetch<JellyfinItemsResponse<JellyfinAlbum>>(
+            `/Items/${albumId}/Similar?${queryParams}`
+        );
 
-        return response.Items.map(item => ({
-            id: item.Id,
-            name: item.Name,
-            productionYear: item.ProductionYear ?? null,
-            isFolder: item.IsFolder || false,
-            albumArtist: item.AlbumArtist ?? null,
-            dateCreated: item.DateCreated ? new Date(item.DateCreated).getTime() : null,
-            metadataJson: JSON.stringify(item),
-            artistItems: item.ArtistItems?.map(artist => ({
-                id: artist.Id,
-                name: artist.Name,
-                isFolder: artist.IsFolder,
-                metadataJson: JSON.stringify(artist),
-            })) || [],
-        }));
+        return {
+            items: response.Items.map(item => ({
+                id: item.Id,
+                name: item.Name,
+                productionYear: item.ProductionYear ?? null,
+                isFolder: item.IsFolder || false,
+                albumArtist: item.AlbumArtist ?? null,
+                dateCreated: item.DateCreated ? new Date(item.DateCreated).getTime() : null,
+                metadataJson: JSON.stringify(item),
+                artistItems: item.ArtistItems?.map(artist => ({
+                    id: artist.Id,
+                    name: artist.Name,
+                    isFolder: artist.IsFolder,
+                    metadataJson: JSON.stringify(artist),
+                })) || [],
+            })),
+            total: response.TotalRecordCount,
+            offset,
+            limit,
+        };
     }
 
     /**
    * Get instant mix
    */
-    async getInstantMix(entityId: string, params?: ListParams): Promise<Track[]> {
+    async getInstantMix(entityId: string, params?: ListParams): Promise<ListResult<Track>> {
         const offset = params?.offset || 0;
         const limit = params?.limit || DEFAULT_LIMIT;
 
@@ -482,44 +477,33 @@ export class JellyfinDriver extends SourceDriver {
             Limit: limit.toString(),
         });
 
-        const response = await this.fetch<{ Items: Array<{
-      Id: string;
-      Name: string;
-      AlbumId?: string;
-      Album?: string;
-      AlbumArtist?: string;
-      ProductionYear?: number;
-      IndexNumber?: number;
-      ParentIndexNumber?: number;
-      RunTimeTicks?: number;
-      ArtistItems?: Array<{
-        Id: string;
-        Name: string;
-        IsFolder: boolean;
-      }>;
-      [key: string]: unknown;
-    }> }>(
-        `/Items/${entityId}/InstantMix?${queryParams}`
-    );
+        const response = await this.fetch<JellyfinItemsResponse<JellyfinTrack>>(
+            `/Items/${entityId}/InstantMix?${queryParams}`
+        );
 
-        return response.Items.map(item => ({
-            id: item.Id,
-            name: item.Name,
-            albumId: item.AlbumId ?? null,
-            album: item.Album ?? null,
-            albumArtist: item.AlbumArtist ?? null,
-            productionYear: item.ProductionYear ?? null,
-            indexNumber: item.IndexNumber ?? null,
-            parentIndexNumber: item.ParentIndexNumber ?? null,
-            runTimeTicks: item.RunTimeTicks ?? null,
-            metadataJson: JSON.stringify(item),
-            artistItems: item.ArtistItems?.map(artist => ({
-                id: artist.Id,
-                name: artist.Name,
-                isFolder: artist.IsFolder,
-                metadataJson: JSON.stringify(artist),
-            })) || [],
-        }));
+        return {
+            items: response.Items.map(item => ({
+                id: item.Id,
+                name: item.Name,
+                albumId: item.AlbumId ?? null,
+                album: item.Album ?? null,
+                albumArtist: item.AlbumArtist ?? null,
+                productionYear: item.ProductionYear ?? null,
+                indexNumber: item.IndexNumber ?? null,
+                parentIndexNumber: item.ParentIndexNumber ?? null,
+                runTimeTicks: item.RunTimeTicks ?? null,
+                metadataJson: JSON.stringify(item),
+                artistItems: item.ArtistItems?.map(artist => ({
+                    id: artist.Id,
+                    name: artist.Name,
+                    isFolder: artist.IsFolder,
+                    metadataJson: JSON.stringify(artist),
+                })) || [],
+            })),
+            total: response.TotalRecordCount,
+            offset,
+            limit,
+        };
     }
 
     /**
@@ -540,7 +524,9 @@ export class JellyfinDriver extends SourceDriver {
    */
     async getTrackLyrics(trackId: string): Promise<Lyrics | null> {
         try {
-            return await this.fetch<Lyrics>(`/Audio/${trackId}/Lyrics`);
+            return await this.fetch<Lyrics>(
+                `/Audio/${trackId}/Lyrics`
+            );
         } catch {
             return null;
         }
@@ -582,7 +568,7 @@ export class JellyfinDriver extends SourceDriver {
    */
     async getDownloadInfo(trackId: string, options?: DownloadOptions): Promise<DownloadInfo> {
         const url = await this.getStreamUrl(trackId, { bitrate: options?.bitrate });
-    
+
         return {
             url,
             filename: `${trackId}.mp3`,

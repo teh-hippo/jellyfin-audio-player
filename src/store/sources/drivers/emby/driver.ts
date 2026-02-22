@@ -1,14 +1,40 @@
 /**
  * Emby Source Driver
- * 
+ *
  * Implements the SourceDriver interface for Emby servers.
  * Provides paging support for all list endpoints.
  */
 
 import { Platform } from 'react-native';
-import { SourceDriver } from '../types';
-import type { SourceInfo, ListParams, Artist, Album, Track, Playlist, SearchFilter, SearchResultItem, CodecMetadata, Lyrics, StreamOptions, DownloadOptions, DownloadInfo } from '../types';
-import type { EmbyAlbum, EmbyTrack, EmbyItemsResponse, DeviceMap, TrackOptionsOsOverrides } from './types';
+import {
+    Album,
+    Artist,
+    Playlist,
+    Track,
+    ListParams,
+    ListResult,
+    SourceDriver,
+    SourceInfo,
+    SearchFilter,
+    SearchResultItem,
+    CodecMetadata,
+    Lyrics,
+    StreamOptions,
+    DownloadOptions,
+    DownloadInfo,
+    SearchFilterType,
+} from '../../types';
+import type {
+    EmbyAlbum,
+    EmbyTrack,
+    EmbyItemsResponse,
+    EmbyArtist,
+    EmbyPlaylist,
+    EmbySearchResult,
+    EmbySystemInfo,
+    DeviceMap,
+    TrackOptionsOsOverrides,
+} from './types';
 import { APP_VERSION } from '@/CONSTANTS';
 
 /** Map the output of `Platform.OS`, so that Emby can understand it. */
@@ -22,10 +48,19 @@ const deviceMap: DeviceMap = {
 
 const DEFAULT_LIMIT = 500;
 
+/** Base query params shared across all browsable list endpoints */
+const BASE_QUERY_PARAMS = {
+    SortBy: 'SortName',
+    SortOrder: 'Ascending',
+    Recursive: 'true',
+    ImageTypeLimit: '1',
+    EnableImageTypes: 'Primary,Backdrop,Banner,Thumb',
+} as const;
+
 export class EmbyDriver extends SourceDriver {
     /**
-   * Generate authentication headers for requests
-   */
+     * Generate authentication headers for requests
+     */
     private generateHeaders(): Record<string, string> {
         return {
             'X-Emby-Authorization': `MediaBrowser Client="Fintunes", Device="${deviceMap[Platform.OS]}", DeviceId="${this.source.deviceId}", Version="${APP_VERSION}", Token="${this.source.accessToken}"`,
@@ -33,11 +68,14 @@ export class EmbyDriver extends SourceDriver {
     }
 
     /**
-   * Execute an API request
-   */
+     * A convenience wrapper to execute a request against the Emby server with
+     * proper error handling and authentication headers.
+     */
     private async fetch<T>(path: string, config?: RequestInit): Promise<T> {
+        // Create full URL path
         const url = `${this.source.uri}${path.startsWith('/') ? '' : '/'}${path}`;
-    
+
+        // Execute the request with authentication headers
         const response = await fetch(url, {
             ...config,
             headers: {
@@ -46,10 +84,7 @@ export class EmbyDriver extends SourceDriver {
             },
         });
 
-        if (__DEV__) {
-            console.log(`%c[HTTP] → [${response.status}] ${url}`, 'font-weight:bold;');
-        }
-
+        // GUARD: Check for HTTP errors
         if (!response.ok) {
             if (response.status === 403 || response.status === 401) {
                 throw new Error('AuthenticationFailed');
@@ -63,16 +98,11 @@ export class EmbyDriver extends SourceDriver {
     }
 
     /**
-   * Connect to the Emby server
-   */
+     * Connect to the Emby server
+     */
     async connect(): Promise<SourceInfo> {
-        const data = await this.fetch<{
-      Id: string;
-      ServerName: string;
-      Version: string;
-      OperatingSystem: string;
-    }>('/System/Info');
-    
+        const data = await this.fetch<EmbySystemInfo>('/System/Info');
+
         return {
             id: data.Id,
             name: data.ServerName,
@@ -82,102 +112,116 @@ export class EmbyDriver extends SourceDriver {
     }
 
     /**
-   * Get artists with paging
-   */
-    async getArtists(params?: ListParams): Promise<Artist[]> {
+     * Get artists with paging
+     */
+    async getArtists(params?: ListParams): Promise<ListResult<Artist>> {
         const offset = params?.offset || 0;
         const limit = params?.limit || DEFAULT_LIMIT;
 
         const queryParams = new URLSearchParams({
-            SortBy: 'SortName',
-            SortOrder: 'Ascending',
-            Recursive: 'true',
+            ...BASE_QUERY_PARAMS,
             Fields: 'PrimaryImageAspectRatio,SortName,BasicSyncInfo,DateCreated,Overview',
-            ImageTypeLimit: '1',
-            EnableImageTypes: 'Primary,Backdrop,Banner,Thumb',
             StartIndex: offset.toString(),
             Limit: limit.toString(),
         });
 
-        const response = await this.fetch<{ Items: Array<{
-      Id: string;
-      Name: string;
-      IsFolder: boolean;
-      [key: string]: unknown;
-    }> }>(`/Artists/AlbumArtists?${queryParams}`);
-    
-        return response.Items.map(item => ({
-            id: item.Id,
-            name: item.Name,
-            isFolder: item.IsFolder || false,
-            metadataJson: JSON.stringify(item),
-        }));
+        const response = await this.fetch<EmbyItemsResponse<EmbyArtist>>(
+            `/Artists/AlbumArtists?${queryParams}`,
+        );
+
+        return {
+            items: response.Items.map((item) => ({
+                id: item.Id,
+                name: item.Name,
+                isFolder: item.IsFolder || false,
+                metadataJson: JSON.stringify(item),
+            })),
+            total: response.TotalRecordCount,
+            offset,
+            limit,
+        };
     }
 
     /**
-   * Get albums with paging
-   */
-    async getAlbums(params?: ListParams): Promise<Album[]> {
+     * Get albums with paging
+     */
+    async getAlbums(params?: ListParams): Promise<ListResult<Album>> {
         const offset = params?.offset || 0;
         const limit = params?.limit || DEFAULT_LIMIT;
 
         const queryParams = new URLSearchParams({
+            ...BASE_QUERY_PARAMS,
             SortBy: 'AlbumArtist,SortName',
-            SortOrder: 'Ascending',
             IncludeItemTypes: 'MusicAlbum',
-            Recursive: 'true',
             Fields: 'PrimaryImageAspectRatio,SortName,BasicSyncInfo,DateCreated',
-            ImageTypeLimit: '1',
-            EnableImageTypes: 'Primary,Backdrop,Banner,Thumb',
             StartIndex: offset.toString(),
             Limit: limit.toString(),
         });
 
         const response = await this.fetch<EmbyItemsResponse<EmbyAlbum>>(
-            `/Users/${this.source.userId}/Items?${queryParams}`
+            `/Users/${this.source.userId}/Items?${queryParams}`,
         );
 
-        return response.Items.map(item => ({
-            id: item.Id,
-            name: item.Name,
-            productionYear: item.ProductionYear ?? null,
-            isFolder: item.IsFolder || false,
-            albumArtist: item.AlbumArtist ?? null,
-            dateCreated: item.DateCreated ? new Date(item.DateCreated).getTime() : null,
-            metadataJson: JSON.stringify(item),
-            artistItems: item.ArtistItems?.map(artist => ({
-                id: artist.Id,
-                name: artist.Name,
-                isFolder: artist.IsFolder,
-                metadataJson: JSON.stringify(artist),
-            })) || [],
-        }));
+        return {
+            items: response.Items.map((item) => ({
+                id: item.Id,
+                name: item.Name,
+                productionYear: item.ProductionYear ?? null,
+                isFolder: item.IsFolder || false,
+                albumArtist: item.AlbumArtist ?? null,
+                dateCreated: item.DateCreated
+                    ? new Date(item.DateCreated).getTime()
+                    : null,
+                metadataJson: JSON.stringify(item),
+                artistItems:
+                    item.ArtistItems?.map((artist) => ({
+                        id: artist.Id,
+                        name: artist.Name,
+                        isFolder: artist.IsFolder,
+                        metadataJson: JSON.stringify(artist),
+                    })) || [],
+            })),
+            total: response.TotalRecordCount,
+            offset,
+            limit,
+        };
     }
 
     /**
-   * Get a specific album
-   */
+     * Get a specific album
+     */
     async getAlbum(albumId: string): Promise<Album> {
         const item = await this.fetch<EmbyAlbum>(
-            `/Users/${this.source.userId}/Items/${albumId}`
+            `/Users/${this.source.userId}/Items/${albumId}`,
         );
-    
+
         return {
             id: item.Id,
             name: item.Name,
             productionYear: item.ProductionYear ?? null,
             isFolder: item.IsFolder || false,
             albumArtist: item.AlbumArtist ?? null,
-            dateCreated: item.DateCreated ? new Date(item.DateCreated).getTime() : null,
+            dateCreated: item.DateCreated
+                ? new Date(item.DateCreated).getTime()
+                : null,
             metadataJson: JSON.stringify(item),
-            artistItems: item.ArtistItems?.map(artist => ({ id: artist.Id, name: artist.Name, isFolder: artist.IsFolder, metadataJson: JSON.stringify(artist) })) || [],
+            artistItems:
+                item.ArtistItems?.map((artist) => ({
+                    id: artist.Id,
+                    name: artist.Name,
+                    isFolder: artist.IsFolder,
+                    metadataJson: JSON.stringify(artist),
+                })) || [],
         };
     }
 
     /**
-   * Get tracks for an album with paging
-   */
-    async getTracksByAlbum(albumId: string, params?: ListParams): Promise<Track[]> {
+     * Get tracks for an album with paging
+     */
+    async getTracksByAlbum(
+        albumId: string,
+        params?: ListParams,
+    ): Promise<ListResult<Track>> {
         const offset = params?.offset || 0;
         const limit = params?.limit || DEFAULT_LIMIT;
 
@@ -190,74 +234,76 @@ export class EmbyDriver extends SourceDriver {
         });
 
         const response = await this.fetch<EmbyItemsResponse<EmbyTrack>>(
-            `/Users/${this.source.userId}/Items?${queryParams}`
+            `/Users/${this.source.userId}/Items?${queryParams}`,
         );
 
-        return response.Items.map(item => ({
-            id: item.Id,
-            name: item.Name,
-            albumId: item.AlbumId ?? null,
-            album: item.Album ?? null,
-            albumArtist: item.AlbumArtist ?? null,
-            productionYear: item.ProductionYear ?? null,
-            indexNumber: item.IndexNumber ?? null,
-            parentIndexNumber: item.ParentIndexNumber ?? null,
-            runTimeTicks: item.RunTimeTicks ?? null,
-            metadataJson: JSON.stringify(item),
-            artistItems: item.ArtistItems?.map(artist => ({ id: artist.Id, name: artist.Name, isFolder: artist.IsFolder, metadataJson: JSON.stringify(artist) })) || [],
-        }));
+        return {
+            items: response.Items.map((item) => ({
+                id: item.Id,
+                name: item.Name,
+                albumId: item.AlbumId ?? null,
+                album: item.Album ?? null,
+                albumArtist: item.AlbumArtist ?? null,
+                productionYear: item.ProductionYear ?? null,
+                indexNumber: item.IndexNumber ?? null,
+                parentIndexNumber: item.ParentIndexNumber ?? null,
+                runTimeTicks: item.RunTimeTicks ?? null,
+                metadataJson: JSON.stringify(item),
+                artistItems:
+                    item.ArtistItems?.map((artist) => ({
+                        id: artist.Id,
+                        name: artist.Name,
+                        isFolder: artist.IsFolder,
+                        metadataJson: JSON.stringify(artist),
+                    })) || [],
+            })),
+            total: response.TotalRecordCount,
+            offset,
+            limit,
+        };
     }
 
     /**
-   * Get playlists with paging
-   */
-    async getPlaylists(params?: ListParams): Promise<Playlist[]> {
+     * Get playlists with paging
+     */
+    async getPlaylists(params?: ListParams): Promise<ListResult<Playlist>> {
         const offset = params?.offset || 0;
         const limit = params?.limit || DEFAULT_LIMIT;
 
         const queryParams = new URLSearchParams({
-            SortBy: 'SortName',
-            SortOrder: 'Ascending',
+            ...BASE_QUERY_PARAMS,
             IncludeItemTypes: 'Playlist',
-            Recursive: 'true',
             Fields: 'PrimaryImageAspectRatio,SortName,BasicSyncInfo,DateCreated,ChildCount',
-            ImageTypeLimit: '1',
-            EnableImageTypes: 'Primary,Backdrop,Banner,Thumb',
             StartIndex: offset.toString(),
             Limit: limit.toString(),
         });
 
-        const response = await this.fetch<{ Items: Array<{
-      Id: string;
-      Name: string;
-      CanDelete: boolean;
-      ChildCount?: number;
-      [key: string]: unknown;
-    }> }>(
-        `/Users/${this.source.userId}/Items?${queryParams}`
-    );
+        const response = await this.fetch<EmbyItemsResponse<EmbyPlaylist>>(
+            `/Users/${this.source.userId}/Items?${queryParams}`,
+        );
 
-        return response.Items.map(item => ({
-            id: item.Id,
-            name: item.Name,
-            canDelete: item.CanDelete || false,
-            childCount: item.ChildCount ?? null,
-            metadataJson: JSON.stringify(item),
-        }));
+        return {
+            items: response.Items.map((item) => ({
+                id: item.Id,
+                name: item.Name,
+                canDelete: item.CanDelete || false,
+                childCount: item.ChildCount ?? null,
+                metadataJson: JSON.stringify(item),
+            })),
+            total: response.TotalRecordCount,
+            offset,
+            limit,
+        };
     }
 
     /**
-   * Get a specific playlist
-   */
+     * Get a specific playlist
+     */
     async getPlaylist(playlistId: string): Promise<Playlist> {
-        const item = await this.fetch<{
-      Id: string;
-      Name: string;
-      CanDelete: boolean;
-      ChildCount?: number;
-      [key: string]: unknown;
-    }>(`/Users/${this.source.userId}/Items/${playlistId}`);
-    
+        const item = await this.fetch<EmbyPlaylist>(
+            `/Users/${this.source.userId}/Items/${playlistId}`,
+        );
+
         return {
             id: item.Id,
             name: item.Name,
@@ -268,9 +314,12 @@ export class EmbyDriver extends SourceDriver {
     }
 
     /**
-   * Get tracks for a playlist with paging
-   */
-    async getTracksByPlaylist(playlistId: string, params?: ListParams): Promise<Track[]> {
+     * Get tracks for a playlist with paging
+     */
+    async getTracksByPlaylist(
+        playlistId: string,
+        params?: ListParams,
+    ): Promise<ListResult<Track>> {
         const offset = params?.offset || 0;
         const limit = params?.limit || DEFAULT_LIMIT;
 
@@ -281,131 +330,149 @@ export class EmbyDriver extends SourceDriver {
             Limit: limit.toString(),
         });
 
-        const response = await this.fetch<{ Items: Array<{
-      Id: string;
-      Name: string;
-      AlbumId?: string;
-      Album?: string;
-      AlbumArtist?: string;
-      ProductionYear?: number;
-      IndexNumber?: number;
-      ParentIndexNumber?: number;
-      RunTimeTicks?: number;
-      ArtistItems?: Array<{
-        Id: string;
-        Name: string;
-        IsFolder: boolean;
-      }>;
-      [key: string]: unknown;
-    }> }>(
-        `/Playlists/${playlistId}/Items?${queryParams}`
-    );
+        const response = await this.fetch<EmbyItemsResponse<EmbyTrack>>(
+            `/Playlists/${playlistId}/Items?${queryParams}`,
+        );
 
-        return response.Items.map(item => ({
-            id: item.Id,
-            name: item.Name,
-            albumId: item.AlbumId ?? null,
-            album: item.Album ?? null,
-            albumArtist: item.AlbumArtist ?? null,
-            productionYear: item.ProductionYear ?? null,
-            indexNumber: item.IndexNumber ?? null,
-            parentIndexNumber: item.ParentIndexNumber ?? null,
-            runTimeTicks: item.RunTimeTicks ?? null,
-            metadataJson: JSON.stringify(item),
-            artistItems: item.ArtistItems?.map(artist => ({ id: artist.Id, name: artist.Name, isFolder: artist.IsFolder, metadataJson: JSON.stringify(artist) })) || [],
-        }));
+        return {
+            items: response.Items.map((item) => ({
+                id: item.Id,
+                name: item.Name,
+                albumId: item.AlbumId ?? null,
+                album: item.Album ?? null,
+                albumArtist: item.AlbumArtist ?? null,
+                productionYear: item.ProductionYear ?? null,
+                indexNumber: item.IndexNumber ?? null,
+                parentIndexNumber: item.ParentIndexNumber ?? null,
+                runTimeTicks: item.RunTimeTicks ?? null,
+                metadataJson: JSON.stringify(item),
+                artistItems:
+                    item.ArtistItems?.map((artist) => ({
+                        id: artist.Id,
+                        name: artist.Name,
+                        isFolder: artist.IsFolder,
+                        metadataJson: JSON.stringify(artist),
+                    })) || [],
+            })),
+            total: response.TotalRecordCount,
+            offset,
+            limit,
+        };
     }
 
     /**
-   * Search for items
-   */
+     * Search for items
+     */
     async search(
         query: string,
-        _filters: SearchFilter[],
-        params?: ListParams
-    ): Promise<SearchResultItem[]> {
+        filters: SearchFilter[],
+        params?: ListParams,
+    ): Promise<ListResult<SearchResultItem>> {
         const offset = params?.offset || 0;
         const limit = params?.limit || DEFAULT_LIMIT;
 
+        const IncludeItemTypes = filters
+            .map((filter) => {
+                switch (filter.type) {
+                    case SearchFilterType.ALBUMS:
+                        return 'MusicAlbum';
+                    case SearchFilterType.TRACKS:
+                        return 'Audio';
+                    case SearchFilterType.PLAYLISTS:
+                        return 'Playlist';
+                    case SearchFilterType.ARTISTS:
+                        return 'Artist';
+                    default:
+                        return null;
+                }
+            })
+            .filter((type) => type !== null)
+            .join(',');
+
         const queryParams = new URLSearchParams({
-            IncludeItemTypes: 'Audio,MusicAlbum,Playlist',
+            ...BASE_QUERY_PARAMS,
             SortBy: 'SearchScore,Album,SortName',
-            SortOrder: 'Ascending',
-            Recursive: 'true',
+            IncludeItemTypes,
             Fields: 'PrimaryImageAspectRatio,SortName,BasicSyncInfo,DateCreated,Overview',
-            ImageTypeLimit: '1',
-            EnableImageTypes: 'Primary,Backdrop,Banner,Thumb',
             SearchTerm: query,
             StartIndex: offset.toString(),
             Limit: limit.toString(),
         });
 
-        const response = await this.fetch<{ Items: Array<{
-      Id: string;
-      Name: string;
-      Type: string;
-      [key: string]: unknown;
-    }> }>(
-        `/Users/${this.source.userId}/Items?${queryParams}`
-    );
+        const response = await this.fetch<EmbyItemsResponse<EmbySearchResult>>(
+            `/Users/${this.source.userId}/Items?${queryParams}`,
+        );
 
-        return response.Items.map(item => ({
-            id: item.Id,
-            name: item.Name,
-            type: item.Type === 'MusicAlbum' ? 'albums' : item.Type === 'Audio' ? 'tracks' : 'playlists',
-        })) as SearchResultItem[];
+        return {
+            items: response.Items.map((item) => ({
+                id: item.Id,
+                name: item.Name,
+                type:
+                    item.Type === 'MusicAlbum'
+                        ? 'albums'
+                        : item.Type === 'Audio'
+                            ? 'tracks'
+                            : 'playlists',
+            })) as SearchResultItem[],
+            total: response.TotalRecordCount,
+            offset,
+            limit,
+        };
     }
 
     /**
-   * Get recent albums
-   */
-    async getRecentAlbums(params?: ListParams): Promise<Album[]> {
+     * Get recent albums
+     */
+    async getRecentAlbums(params?: ListParams): Promise<ListResult<Album>> {
         const offset = params?.offset || 0;
         const limit = params?.limit || DEFAULT_LIMIT;
 
         const queryParams = new URLSearchParams({
+            ...BASE_QUERY_PARAMS,
+            SortBy: 'DateCreated',
+            SortOrder: 'Descending',
             IncludeItemTypes: 'MusicAlbum',
             Fields: 'DateCreated',
-            SortOrder: 'Descending',
-            SortBy: 'DateCreated',
-            Recursive: 'true',
             StartIndex: offset.toString(),
             Limit: limit.toString(),
         });
 
-        const response = await this.fetch<{ Items: Array<{
-      Id: string;
-      Name: string;
-      ProductionYear?: number;
-      IsFolder: boolean;
-      AlbumArtist?: string;
-      DateCreated?: string;
-      ArtistItems?: Array<{
-        Id: string;
-        Name: string;
-        IsFolder: boolean;
-      }>;
-      [key: string]: unknown;
-    }> }>(
-        `/Users/${this.source.userId}/Items?${queryParams}`
-    );
+        const response = await this.fetch<EmbyItemsResponse<EmbyAlbum>>(
+            `/Users/${this.source.userId}/Items?${queryParams}`,
+        );
 
-        return response.Items.map(item => ({
-            id: item.Id,
-            name: item.Name,
-            productionYear: item.ProductionYear ?? null,
-            isFolder: item.IsFolder || false,
-            albumArtist: item.AlbumArtist ?? null,
-            dateCreated: item.DateCreated ? new Date(item.DateCreated).getTime() : null,
-            metadataJson: JSON.stringify(item),
-            artistItems: item.ArtistItems?.map(artist => ({ id: artist.Id, name: artist.Name, isFolder: artist.IsFolder, metadataJson: JSON.stringify(artist) })) || [],
-        }));
+        return {
+            items: response.Items.map((item) => ({
+                id: item.Id,
+                name: item.Name,
+                productionYear: item.ProductionYear ?? null,
+                isFolder: item.IsFolder || false,
+                albumArtist: item.AlbumArtist ?? null,
+                dateCreated: item.DateCreated
+                    ? new Date(item.DateCreated).getTime()
+                    : null,
+                metadataJson: JSON.stringify(item),
+                artistItems:
+                    item.ArtistItems?.map((artist) => ({
+                        id: artist.Id,
+                        name: artist.Name,
+                        isFolder: artist.IsFolder,
+                        metadataJson: JSON.stringify(artist),
+                    })) || [],
+            })),
+            total: response.TotalRecordCount,
+            offset,
+            limit,
+        };
     }
 
     /**
-   * Get similar albums
-   */
-    async getSimilarAlbums(albumId: string, params?: ListParams): Promise<Album[]> {
+     * Get similar albums
+     */
+    async getSimilarAlbums(
+        albumId: string,
+        params?: ListParams,
+    ): Promise<ListResult<Album>> {
         const offset = params?.offset || 0;
         const limit = params?.limit || DEFAULT_LIMIT;
 
@@ -415,39 +482,39 @@ export class EmbyDriver extends SourceDriver {
             Limit: limit.toString(),
         });
 
-        const response = await this.fetch<{ Items: Array<{
-      Id: string;
-      Name: string;
-      ProductionYear?: number;
-      IsFolder: boolean;
-      AlbumArtist?: string;
-      DateCreated?: string;
-      ArtistItems?: Array<{
-        Id: string;
-        Name: string;
-        IsFolder: boolean;
-      }>;
-      [key: string]: unknown;
-    }> }>(
-        `/Items/${albumId}/Similar?${queryParams}`
-    );
+        const response = await this.fetch<EmbyItemsResponse<EmbyAlbum>>(
+            `/Items/${albumId}/Similar?${queryParams}`,
+        );
 
-        return response.Items.map(item => ({
-            id: item.Id,
-            name: item.Name,
-            productionYear: item.ProductionYear ?? null,
-            isFolder: item.IsFolder || false,
-            albumArtist: item.AlbumArtist ?? null,
-            dateCreated: item.DateCreated ? new Date(item.DateCreated).getTime() : null,
-            metadataJson: JSON.stringify(item),
-            artistItems: item.ArtistItems?.map(artist => ({ id: artist.Id, name: artist.Name, isFolder: artist.IsFolder, metadataJson: JSON.stringify(artist) })) || [],
-        }));
+        return {
+            items: response.Items.map((item) => ({
+                id: item.Id,
+                name: item.Name,
+                productionYear: item.ProductionYear ?? null,
+                isFolder: item.IsFolder || false,
+                albumArtist: item.AlbumArtist ?? null,
+                dateCreated: item.DateCreated
+                    ? new Date(item.DateCreated).getTime()
+                    : null,
+                metadataJson: JSON.stringify(item),
+                artistItems:
+                    item.ArtistItems?.map((artist) => ({
+                        id: artist.Id,
+                        name: artist.Name,
+                        isFolder: artist.IsFolder,
+                        metadataJson: JSON.stringify(artist),
+                    })) || [],
+            })),
+            total: response.TotalRecordCount,
+            offset,
+            limit,
+        };
     }
 
     /**
-   * Get instant mix
-   */
-    async getInstantMix(entityId: string, params?: ListParams): Promise<Track[]> {
+     * Get instant mix
+     */
+    async getInstantMix(entityId: string, params?: ListParams): Promise<ListResult<Track>> {
         const offset = params?.offset || 0;
         const limit = params?.limit || DEFAULT_LIMIT;
 
@@ -457,44 +524,39 @@ export class EmbyDriver extends SourceDriver {
             Limit: limit.toString(),
         });
 
-        const response = await this.fetch<{ Items: Array<{
-      Id: string;
-      Name: string;
-      AlbumId?: string;
-      Album?: string;
-      AlbumArtist?: string;
-      ProductionYear?: number;
-      IndexNumber?: number;
-      ParentIndexNumber?: number;
-      RunTimeTicks?: number;
-      ArtistItems?: Array<{
-        Id: string;
-        Name: string;
-        IsFolder: boolean;
-      }>;
-      [key: string]: unknown;
-    }> }>(
-        `/Items/${entityId}/InstantMix?${queryParams}`
-    );
+        const response = await this.fetch<EmbyItemsResponse<EmbyTrack>>(
+            `/Items/${entityId}/InstantMix?${queryParams}`,
+        );
 
-        return response.Items.map(item => ({
-            id: item.Id,
-            name: item.Name,
-            albumId: item.AlbumId ?? null,
-            album: item.Album ?? null,
-            albumArtist: item.AlbumArtist ?? null,
-            productionYear: item.ProductionYear ?? null,
-            indexNumber: item.IndexNumber ?? null,
-            parentIndexNumber: item.ParentIndexNumber ?? null,
-            runTimeTicks: item.RunTimeTicks ?? null,
-            metadataJson: JSON.stringify(item),
-            artistItems: item.ArtistItems?.map(artist => ({ id: artist.Id, name: artist.Name, isFolder: artist.IsFolder, metadataJson: JSON.stringify(artist) })) || [],
-        }));
+        return {
+            items: response.Items.map((item) => ({
+                id: item.Id,
+                name: item.Name,
+                albumId: item.AlbumId ?? null,
+                album: item.Album ?? null,
+                albumArtist: item.AlbumArtist ?? null,
+                productionYear: item.ProductionYear ?? null,
+                indexNumber: item.IndexNumber ?? null,
+                parentIndexNumber: item.ParentIndexNumber ?? null,
+                runTimeTicks: item.RunTimeTicks ?? null,
+                metadataJson: JSON.stringify(item),
+                artistItems:
+                    item.ArtistItems?.map((artist) => ({
+                        id: artist.Id,
+                        name: artist.Name,
+                        isFolder: artist.IsFolder,
+                        metadataJson: JSON.stringify(artist),
+                    })) || [],
+            })),
+            total: response.TotalRecordCount,
+            offset,
+            limit,
+        };
     }
 
     /**
-   * Get track codec metadata
-   */
+     * Get track codec metadata
+     */
     async getTrackCodecMetadata(trackId: string): Promise<CodecMetadata | null> {
         const url = await this.getStreamUrl(trackId);
         const response = await fetch(url, { method: 'HEAD' });
@@ -506,8 +568,8 @@ export class EmbyDriver extends SourceDriver {
     }
 
     /**
-   * Get track lyrics
-   */
+     * Get track lyrics
+     */
     async getTrackLyrics(trackId: string): Promise<Lyrics | null> {
         try {
             return await this.fetch<Lyrics>(`/Audio/${trackId}/Lyrics`);
@@ -517,15 +579,20 @@ export class EmbyDriver extends SourceDriver {
     }
 
     /**
-   * Get stream URL for a track
-   */
-    async getStreamUrl(trackId: string, options?: StreamOptions): Promise<string> {
+     * Get stream URL for a track
+     */
+    async getStreamUrl(
+        trackId: string,
+        options?: StreamOptions,
+    ): Promise<string> {
         const trackOptionsOsOverrides: TrackOptionsOsOverrides = {
             ios: {
-                Container: 'mp3,aac,m4a|aac,m4b|aac,flac,alac,m4a|alac,m4b|alac,wav,m4a,aiff,aif',
+                Container:
+                    'mp3,aac,m4a|aac,m4b|aac,flac,alac,m4a|alac,m4b|alac,wav,m4a,aiff,aif',
             },
             android: {
-                Container: 'mp3,aac,flac,wav,ogg,ogg|vorbis,ogg|opus,mka|mp3,mka|opus,mka|mp3',
+                Container:
+                    'mp3,aac,flac,wav,ogg,ogg|vorbis,ogg|opus,mka|mp3,mka|opus,mka|mp3',
             },
             macos: {},
             web: {},
@@ -548,11 +615,14 @@ export class EmbyDriver extends SourceDriver {
     }
 
     /**
-   * Get download info for a track
-   */
-    async getDownloadInfo(trackId: string, options?: DownloadOptions): Promise<DownloadInfo> {
+     * Get download info for a track
+     */
+    async getDownloadInfo(
+        trackId: string,
+        options?: DownloadOptions,
+    ): Promise<DownloadInfo> {
         const url = await this.getStreamUrl(trackId, { bitrate: options?.bitrate });
-    
+
         return {
             url,
             filename: `${trackId}.mp3`,
@@ -561,9 +631,12 @@ export class EmbyDriver extends SourceDriver {
     }
 
     /**
-   * Report playback start
-   */
-    async reportPlaybackStart(trackId: string, positionTicks: number): Promise<void> {
+     * Report playback start
+     */
+    async reportPlaybackStart(
+        trackId: string,
+        positionTicks: number,
+    ): Promise<void> {
         const payload = {
             ItemId: trackId,
             PositionTicks: positionTicks,
@@ -576,13 +649,16 @@ export class EmbyDriver extends SourceDriver {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
-        }).catch(err => console.error('Failed to report playback start:', err));
+        }).catch((err) => console.error('Failed to report playback start:', err));
     }
 
     /**
-   * Report playback progress
-   */
-    async reportPlaybackProgress(trackId: string, positionTicks: number): Promise<void> {
+     * Report playback progress
+     */
+    async reportPlaybackProgress(
+        trackId: string,
+        positionTicks: number,
+    ): Promise<void> {
         const payload = {
             ItemId: trackId,
             PositionTicks: positionTicks,
@@ -596,13 +672,16 @@ export class EmbyDriver extends SourceDriver {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
-        }).catch(err => console.error('Failed to report playback progress:', err));
+        }).catch((err) => console.error('Failed to report playback progress:', err));
     }
 
     /**
-   * Report playback stop
-   */
-    async reportPlaybackStop(trackId: string, positionTicks: number): Promise<void> {
+     * Report playback stop
+     */
+    async reportPlaybackStop(
+        trackId: string,
+        positionTicks: number,
+    ): Promise<void> {
         const payload = {
             ItemId: trackId,
             PositionTicks: positionTicks,
@@ -613,6 +692,6 @@ export class EmbyDriver extends SourceDriver {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
-        }).catch(err => console.error('Failed to report playback stop:', err));
+        }).catch((err) => console.error('Failed to report playback stop:', err));
     }
 }

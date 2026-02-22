@@ -1,6 +1,6 @@
 /**
  * Jellyfin API Types
- * 
+ *
  * Types for data coming from the Jellyfin API.
  * These use PascalCase to match the API responses.
  */
@@ -24,7 +24,6 @@ export interface JellyfinBaseItem {
     Id: string;
     Name: string;
     ServerId?: string;
-    [key: string]: unknown;
 }
 
 /**
@@ -81,4 +80,14 @@ export interface JellyfinItemsResponse<T> {
  */
 export interface JellyfinSearchResult extends JellyfinBaseItem {
     Type: string;
+}
+
+/**
+ * System info from Jellyfin API
+ */
+export interface JellyfinSystemInfo {
+    Id: string;
+    ServerName: string;
+    Version: string;
+    OperatingSystem: string;
 }

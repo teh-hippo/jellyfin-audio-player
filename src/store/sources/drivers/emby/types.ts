@@ -1,6 +1,6 @@
 /**
  * Emby API Types
- * 
+ *
  * Types for data coming from the Emby API.
  * These use PascalCase to match the API responses.
  */
@@ -81,4 +81,14 @@ export interface EmbyItemsResponse<T> {
  */
 export interface EmbySearchResult extends EmbyBaseItem {
     Type: string;
+}
+
+/**
+ * System info from Emby API
+ */
+export interface EmbySystemInfo {
+    Id: string;
+    ServerName: string;
+    Version: string;
+    OperatingSystem: string;
 }
