@@ -2,9 +2,9 @@ import { sql } from 'drizzle-orm';
 import { useLiveQuery } from '@/store/live-queries';
 import { db } from '@/store';
 import { useMemo } from 'react';
-import type { Album } from './types';
+
 import type { EntityId } from '@/store/types';
-import albums from './entity';
+import { groupByAlphabet } from '@/utility/groupByAlphabet';
 
 export function useAlbums() {
     return useLiveQuery(
@@ -30,45 +30,25 @@ export function useRecentAlbums(limit: number = 24) {
 }
 
 /**
- * Returns all albums grouped into alphabetical sections, pre-sorted in the
- * DB by UPPER(COALESCE(album_artist, name)) then UPPER(name). The section key
- * is the uppercase first letter of the album artist (falling back to the album
- * name), or '#' for non-alphabetic names.
- *
- * Sorting is done in SQLite so the JS grouping is a single linear pass with
- * no re-sorting.
+ * Returns all albums grouped into alphabetical sections, sorted and grouped
+ * by the album artist name (falling back to the album name). The section key
+ * is the uppercase first letter of that value, or '#' for non-alphabetic names.
+ * The '#' section is always placed at the end.
  */
 export function useAlbumsByAlphabet() {
     const { data } = useLiveQuery(
-        db.select()
-            .from(albums)
-            .orderBy(sql`UPPER(COALESCE(${albums.albumArtist}, ${albums.name})), UPPER(${albums.name})`)
+        db.query.albums.findMany({
+            orderBy: (albums, { asc }) => [
+                asc(sql`UPPER(COALESCE(${albums.albumArtist}, ${albums.name}))`),
+                asc(sql`UPPER(${albums.name})`),
+            ],
+        })
     );
 
-    return useMemo(() => {
-        if (!data) return [];
-
-        const sections: { label: string; data: Album[] }[] = [];
-
-        for (const album of data) {
-            const firstChar = (album.albumArtist ?? album.name)[0]?.toUpperCase() ?? '#';
-            const label = /^[A-Z]$/.test(firstChar) ? firstChar : '#';
-
-            const last = sections[sections.length - 1];
-            if (last?.label === label) {
-                last.data.push(album);
-            } else {
-                sections.push({ label, data: [album] });
-            }
-        }
-
-        // '#' section lands first when names start with non-alpha; move it to end
-        if (sections[0]?.label === '#') {
-            sections.push(sections.shift()!);
-        }
-
-        return sections;
-    }, [data]);
+    return useMemo(
+        () => groupByAlphabet(data ?? [], (album) => album.albumArtist ?? album.name),
+        [data],
+    );
 }
 
 /**

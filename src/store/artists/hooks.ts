@@ -2,13 +2,13 @@ import { sql } from 'drizzle-orm';
 import { useLiveQuery } from '@/store/live-queries';
 import { db } from '@/store';
 import { useMemo } from 'react';
-import type { Artist } from './types';
-import artists from './entity';
+import { groupByAlphabet } from '@/utility/groupByAlphabet';
 
 export function useArtists(sourceId?: string) {
     return useLiveQuery(
         db.query.artists.findMany({
             where: sourceId ? { sourceId } : undefined,
+            orderBy: (artists, { asc }) => [asc(sql`UPPER(${artists.name})`)],
         })
     );
 }
@@ -22,44 +22,21 @@ export function useArtist([sourceId, id]: [sourceId: string, id: string]) {
 }
 
 /**
- * Returns all artists grouped into alphabetical sections, pre-sorted in the
- * DB by UPPER(name). The section key is the uppercase first letter of the
- * artist name (or '#' for non-alphabetic names).
- *
- * Sorting is done in SQLite so the JS grouping is a single linear pass with
- * no re-sorting.
+ * Returns all artists grouped into alphabetical sections, sorted and grouped
+ * by the artist name. The section key is the uppercase first letter of the
+ * name, or '#' for non-alphabetic names. The '#' section is always placed
+ * at the end.
  */
 export function useArtistsByAlphabet(sourceId?: string) {
     const { data } = useLiveQuery(
-        db.select()
-            .from(artists)
-            .$dynamic()
-            .where(sourceId ? sql`${artists.sourceId} = ${sourceId}` : undefined)
-            .orderBy(sql`UPPER(${artists.name})`)
+        db.query.artists.findMany({
+            where: sourceId ? { sourceId } : undefined,
+            orderBy: (artists, { asc }) => [asc(sql`UPPER(${artists.name})`)],
+        })
     );
 
-    return useMemo(() => {
-        if (!data) return [];
-
-        const sections: { label: string; data: Artist[] }[] = [];
-
-        for (const artist of data) {
-            const firstChar = artist.name[0]?.toUpperCase() ?? '#';
-            const label = /^[A-Z]$/.test(firstChar) ? firstChar : '#';
-
-            const last = sections[sections.length - 1];
-            if (last?.label === label) {
-                last.data.push(artist);
-            } else {
-                sections.push({ label, data: [artist] });
-            }
-        }
-
-        // '#' section lands first when names start with non-alpha; move it to end
-        if (sections[0]?.label === '#') {
-            sections.push(sections.shift()!);
-        }
-
-        return sections;
-    }, [data]);
+    return useMemo(
+        () => groupByAlphabet(data ?? [], (artist) => artist.name),
+        [data],
+    );
 }
