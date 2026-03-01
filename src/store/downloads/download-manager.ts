@@ -90,8 +90,8 @@ class DownloadQueue {
     /**
      * Queue a track for download.
      *
-     * Writes an incomplete row to the downloads table so the intent survives a
-     * restart, then immediately pushes an execution task onto the queue. Safe to
+     * Immediately pushes an execution task onto the queue. The DB row is written
+     * inside executeDownload once the filename and MIME type are known. Safe to
      * call multiple times for the same track — duplicate calls are ignored while
      * the track is already active.
      */
@@ -104,10 +104,6 @@ class DownloadQueue {
         if (this.active.has(key)) {
             return;
         }
-
-        // Write the row before touching the queue so the intent is persisted
-        // even if the app is killed between here and executeDownload starting.
-        await initializeDownload([track.sourceId, track.id]);
 
         this.active.add(key);
         // p-queue starts the task immediately if a concurrency slot is free,

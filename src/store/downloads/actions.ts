@@ -14,20 +14,20 @@ export async function getDownload([sourceId, id]: EntityId) {
 }
 
 export interface InitializeDownloadParams {
+    filename: string;
+    mimetype: string;
     hash?: string;
-    filename?: string;
-    mimetype?: string;
     fileSize?: number;
 }
 
 export async function initializeDownload(
     [sourceId, id]: EntityId,
     {
-        hash,
         filename,
         mimetype,
+        hash,
         fileSize,
-    }: InitializeDownloadParams = {}
+    }: InitializeDownloadParams
 ): Promise<void> {
     await db.insert(downloads).values({
         sourceId,
@@ -68,7 +68,7 @@ export async function updateDownloadProgress(
 }
 
 export interface CompleteDownloadParams {
-    filename?: string;
+    filename: string;
     fileSize?: number;
     artworkPath?: string;
 }
@@ -79,15 +79,15 @@ export async function completeDownload(
         filename,
         fileSize,
         artworkPath,
-    }: CompleteDownloadParams = {}
+    }: CompleteDownloadParams
 ): Promise<void> {
     const updates: Partial<typeof downloads.$inferInsert> = {
         isComplete: true,
         isFailed: false,
         progress: 1,
+        filename,
     };
 
-    if (filename) updates.filename = filename;
     if (fileSize != null) updates.fileSize = fileSize;
     if (artworkPath) updates.artworkPath = artworkPath;
 
