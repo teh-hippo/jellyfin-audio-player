@@ -6,7 +6,7 @@ import { EntityType, type SyncCursor } from './types';
 
 export async function getIncompleteCursors(): Promise<SyncCursor[]> {
     return db.query.syncCursors.findMany({
-        where: (c) => eq(c.completed, false),
+        where: { completed: false },
     });
 }
 

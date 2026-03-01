@@ -10,8 +10,8 @@ const settings = sqliteTable('settings', {
     hasReceivedErrorReportingAlert: integer('has_received_error_reporting_alert', { mode: 'boolean' }).notNull(),
     enablePlaybackReporting: integer('enable_playback_reporting', { mode: 'boolean' }).notNull(),
     colorScheme: text('color_scheme').notNull(),
-    createdAt: integer('created_at').notNull(),
-    updatedAt: integer('updated_at').notNull(),
+    createdAt: integer('created_at').notNull().$default(() => Date.now()),
+    updatedAt: integer('updated_at').notNull().$default(() => Date.now()).$onUpdate(() => Date.now()),
 });
 
 export default settings;

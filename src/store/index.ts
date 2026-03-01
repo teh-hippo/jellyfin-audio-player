@@ -2,40 +2,7 @@ import { drizzle } from 'drizzle-orm/op-sqlite';
 import { open } from '@op-engineering/op-sqlite';
 import { migrate } from 'drizzle-orm/op-sqlite/migrator';
 import migrations from './database/migrations/migrations.js';
-
-// Import all schema tables
-import sources from './sources/entity';
-import settings from './settings/entity';
-import sleepTimer from './sleep-timer/entity';
-import artists from './artists/entity';
-import albums from './albums/entity';
-import tracks from './tracks/entity';
-import playlists from './playlists/entity';
-import downloads from './downloads/entity';
-import searchQueries from './search-queries/entity';
-import albumArtists from './album-artists/entity';
-import trackArtists from './track-artists/entity';
-import playlistTracks from './playlist-tracks/entity';
-import albumSimilar from './album-similar/entity';
-import syncCursors from './sync-cursors/entity';
-
-// Combined schema for drizzle
-const schema = {
-    sources,
-    settings,
-    sleepTimer,
-    artists,
-    albums,
-    tracks,
-    playlists,
-    downloads,
-    searchQueries,
-    albumArtists,
-    trackArtists,
-    playlistTracks,
-    albumSimilar,
-    syncCursors,
-};
+import { relations } from './database/relations';
 
 // Open the SQLite database
 export const sqliteDb = open({
@@ -43,8 +10,8 @@ export const sqliteDb = open({
     location: '../databases',
 });
 
-// Create drizzle instance with schema - exported as singleton
-export const db = drizzle(sqliteDb, { schema });
+// Create drizzle instance with v2 relations — exported as singleton
+export const db = drizzle(sqliteDb, { relations });
 
 /**
  * Run database migrations

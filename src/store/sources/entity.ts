@@ -10,8 +10,8 @@ const sources = sqliteTable('sources', {
     accessToken: text('access_token'),
     deviceId: text('device_id'),
     type: text('type').notNull(), // 'jellyfin.v1' or 'emby.v1'
-    createdAt: integer('created_at').notNull(),
-    updatedAt: integer('updated_at').notNull(),
+    createdAt: integer('created_at').notNull().$default(() => Date.now()),
+    updatedAt: integer('updated_at').notNull().$default(() => Date.now()).$onUpdate(() => Date.now()),
 });
 
 export default sources;

@@ -60,9 +60,8 @@ export async function setCredentials(credentials: {
     deviceId: string;
     type: 'jellyfin' | 'emby';
 }): Promise<void> {
-    const now = Date.now();
     const sourceType = credentials.type === 'jellyfin' ? 'jellyfin.v1' : 'emby.v1';
-    
+
     // Use deviceId as the source id for consistency
     const sourceId = credentials.deviceId;
 
@@ -74,8 +73,6 @@ export async function setCredentials(credentials: {
             accessToken: credentials.accessToken,
             deviceId: credentials.deviceId,
             type: sourceType,
-            createdAt: now,
-            updatedAt: now,
         })
         .onConflictDoUpdate({
             target: sources.id,
@@ -85,9 +82,8 @@ export async function setCredentials(credentials: {
                 accessToken: credentials.accessToken,
                 deviceId: credentials.deviceId,
                 type: sourceType,
-                updatedAt: now,
             },
         });
-    
+
     sqliteDb.flushPendingReactiveQueries();
 }

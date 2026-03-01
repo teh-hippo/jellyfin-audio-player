@@ -7,7 +7,6 @@ import albums from './entity';
 import { and, eq } from 'drizzle-orm';
 import type { EntityId } from '@/store/types';
 import type { InsertAlbum } from './types';
-import { getAllSourceDrivers } from '../sources/actions';
 
 /**
  * createdAt and updatedAt are optional — they reflect server-side timestamps
@@ -55,9 +54,4 @@ export async function deleteAlbum([sourceId, id]: EntityId): Promise<void> {
 export async function deleteAlbumsBySource(sourceId: string): Promise<void> {
     await db.delete(albums).where(eq(albums.sourceId, sourceId));
     sqliteDb.flushPendingReactiveQueries();
-}
-
-export async function refreshAlbums(): Promise<void> {
-    // TODO: implement per-driver refresh logic
-    (await getAllSourceDrivers()).forEach((driver) => driver.getAlbums());
 }

@@ -9,17 +9,12 @@ import type { InsertSearchQuery } from './types';
 import type { EntityId } from '@/store/types';
 
 export async function upsertSearchQuery(query: InsertSearchQuery): Promise<void> {
-    const now = Date.now();
-
     await db.insert(searchQueries).values({
         ...query,
-        createdAt: now,
-        updatedAt: now,
     }).onConflictDoUpdate({
         target: searchQueries.id,
         set: {
             ...query,
-            updatedAt: now,
         },
     });
 

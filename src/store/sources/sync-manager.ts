@@ -229,24 +229,22 @@ export class SourceSyncManager {
     // -------------------------------------------------------------------------
 
     async run(): Promise<void> {
-        while (true) {
-            // Load whatever incomplete work exists at this moment. On the first
-            // iteration this is any previously interrupted sync plus anything
-            // enqueued since the last run.
-            const cursors = await getIncompleteCursors();
-            if (cursors.length === 0) break;
+        // Load whatever incomplete work exists at this moment. On the first
+        // iteration this is any previously interrupted sync plus anything
+        // enqueued since the last run.
+        const cursors = await getIncompleteCursors();
+        if (cursors.length === 0) return;
 
-            // Schedule every cursor as an independent task. The queue's concurrency
-            // setting controls how many execute in parallel.
-            for (const cursor of cursors) {
-                this.queue.add(() => this.executeTask(cursor));
-            }
-
-            // Wait for this entire batch to finish before looping. Executors may
-            // have written new child cursors to the database during this batch,
-            // which the next iteration will pick up.
-            await this.queue.onIdle();
+        // Schedule every cursor as an independent task. The queue's concurrency
+        // setting controls how many execute in parallel.
+        for (const cursor of cursors) {
+            this.queue.add(() => this.executeTask(cursor));
         }
+
+        // Wait for this entire batch to finish before looping. Executors may
+        // have written new child cursors to the database during this batch,
+        // which the next iteration will pick up.
+        await this.queue.onIdle();
     }
 
     // -------------------------------------------------------------------------
