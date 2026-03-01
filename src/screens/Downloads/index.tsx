@@ -86,7 +86,7 @@ function DownloadRow({
                         </Text>
                     ) : null}
                     <View style={{ marginRight: 12 }}>
-                        <DownloadIcon trackId={download.id} />
+                        <DownloadIcon track={track ? { ...track, download } : null} />
                     </View>
                     <Button
                         onPress={handleDelete}

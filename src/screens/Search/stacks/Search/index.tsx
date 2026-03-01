@@ -24,7 +24,6 @@ import Artwork from '@/store/sources/artwork-manager';
 import { t } from '@/localisation';
 import useDefaultStyles from '@/components/Colors';
 import { SubHeader, Text } from '@/components/Typography';
-import DownloadIcon from '@/components/DownloadIcon';
 import ChevronRight from '@/assets/icons/chevron-right.svg';
 import SearchIcon from '@/assets/icons/magnifying-glass.svg';
 import { ShadowWrapper } from '@/components/Shadow';
@@ -412,11 +411,7 @@ export default function Search() {
                                                     ) : null}
                                                 </HalfOpacity>
                                             </View>
-                                            {item._type === 'Audio' ? (
-                                                <View style={{ marginLeft: 16 }}>
-                                                    <DownloadIcon trackId={item.id} />
-                                                </View>
-                                            ) : null}
+
                                             <View style={{ marginLeft: 16 }}>
                                                 <ChevronRight width={14} height={14} fill={defaultStyles.textQuarterOpacity.color} />
                                             </View>

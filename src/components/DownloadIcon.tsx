@@ -7,12 +7,10 @@ import useDefaultStyles from './Colors';
 import Svg, { Circle, CircleProps } from 'react-native-svg';
 import { Animated, Easing, ViewProps } from 'react-native';
 import styled from 'styled-components/native';
-import type { Download } from '@/store/downloads/types';
-import { useDownload } from '@/store/downloads/hooks';
+import type { TrackWithDownload } from '@/store/tracks/hooks';
 
 interface DownloadIconProps {
-    trackId?: string;
-    download?: Download | null;
+    track?: TrackWithDownload | null;
     size?: number;
     fill?: string;
     style?: ViewProps['style'];
@@ -29,14 +27,13 @@ const IconOverlay = styled.View`
     transform: scale(0.5);
 `;
 
-function DownloadIcon({ trackId, download: downloadProp, size = 16, fill, style }: DownloadIconProps) {
+function DownloadIcon({ track, size = 16, fill, style }: DownloadIconProps) {
     const defaultStyles = useDefaultStyles();
     const iconFill = fill || defaultStyles.textQuarterOpacity.color;
 
-    const { data: downloadData } = useDownload(trackId || '');
-    const download = downloadProp || downloadData || null;
-
+    const download = track?.download ?? null;
     const isQueued = download && !download.isComplete && !download.isFailed;
+
     const radius = useMemo(() => size / 2, [size]);
     const circumference = useMemo(() => radius * 2 * Math.PI, [radius]);
 
@@ -45,7 +42,7 @@ function DownloadIcon({ trackId, download: downloadProp, size = 16, fill, style 
 
     useEffect(() => {
         Animated.timing(offsetAnimation, {
-            toValue: (circumference * (1 - (download?.progress || 0))),
+            toValue: circumference * (1 - (download?.progress || 0)),
             duration: 250,
             useNativeDriver: false,
             easing: Easing.ease,
@@ -90,7 +87,7 @@ function DownloadIcon({ trackId, download: downloadProp, size = 16, fill, style 
                         stroke={iconFill}
                         ref={circleRef}
                         strokeWidth={1.5}
-                        strokeDasharray={[ circumference, circumference ]}
+                        strokeDasharray={[circumference, circumference]}
                         strokeDashoffset={circumference}
                         strokeLinecap='round'
                         fill='transparent'

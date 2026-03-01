@@ -24,6 +24,7 @@ export interface JellyfinBaseItem {
     Id: string;
     Name: string;
     ServerId?: string;
+    [key: string]: unknown;
 }
 
 /**
@@ -46,6 +47,18 @@ export interface JellyfinAlbum extends JellyfinBaseItem {
 }
 
 /**
+ * A single media stream entry as returned by the Jellyfin API.
+ */
+export interface JellyfinMediaStream {
+    Type: 'Audio' | 'Video' | 'Subtitle' | 'EmbeddedImage' | string;
+    Codec?: string;
+    BitRate?: number;
+    SampleRate?: number;
+    Channels?: number;
+    BitDepth?: number;
+}
+
+/**
  * Track from Jellyfin API
  */
 export interface JellyfinTrack extends JellyfinBaseItem {
@@ -58,6 +71,8 @@ export interface JellyfinTrack extends JellyfinBaseItem {
     RunTimeTicks?: number;
     DateCreated?: string;
     ArtistItems?: JellyfinArtist[];
+    HasLyrics?: boolean;
+    MediaStreams?: JellyfinMediaStream[];
 }
 
 /**

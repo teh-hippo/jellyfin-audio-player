@@ -1,6 +1,7 @@
 import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
 import { jsonColumn } from '../database/column-types';
 import sources from '../sources/entity';
+import type { TrackLyrics, TrackMetadata } from '../sources/types';
 
 /**
  * Tracks table
@@ -26,10 +27,10 @@ const tracks = sqliteTable('tracks', {
     parentIndexNumber: integer('parent_index_number'),
     /** Duration of the track in ticks (1 tick = 100 nanoseconds), if known. */
     runTimeTicks: integer('run_time_ticks'),
-    /** Cached lyrics text, populated on demand. */
-    lyrics: text('lyrics'),
+    /** Cached lyrics, populated on demand. Stored as structured JSON. */
+    lyrics: jsonColumn<TrackLyrics>('lyrics'),
     /** Full source API response serialised as JSON, for fields not promoted to dedicated columns. */
-    metadata: jsonColumn<unknown>('metadata'),
+    metadata: jsonColumn<TrackMetadata>('metadata'),
     /**
      * When this record was first synced from the server locally. Set once on
      * insert and never updated — use for stable sorting when remote dates are absent.

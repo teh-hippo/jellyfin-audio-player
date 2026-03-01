@@ -251,7 +251,7 @@ const TrackListView: React.FC<TrackListViewProps> = ({
                             {ticksToDuration(track.runTimeTicks ?? 0)}
                         </Text>
                         <DownloadIcon
-                            trackId={track.id}
+                            track={track}
                             fill={isPlaying ? defaultStyles.themeColorQuarterOpacity.color : undefined}
                         />
                     </View>

@@ -6,9 +6,9 @@ interface Props {
     serverUrl: string;
     onCredentialsRetrieved: (credentials: {
         uri: string;
-        user_id: string;
-        access_token: string;
-        device_id: string;
+        userId: string;
+        accessToken: string;
+        deviceId: string;
         type: 'emby' | 'jellyfin';
     }) => void;
 }
@@ -143,9 +143,9 @@ const CredentialGenerator: React.FC<Props> = ({ serverUrl, onCredentialsRetrieve
         // If a message is received, the credentials should be there
         onCredentialsRetrieved({
             uri: address,
-            user_id: userId,
-            access_token: accessToken,
-            device_id: deviceId,
+            userId,
+            accessToken,
+            deviceId,
             type: data.type,
         });
     }, [onCredentialsRetrieved]);

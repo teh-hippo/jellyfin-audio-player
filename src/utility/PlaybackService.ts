@@ -1,17 +1,20 @@
 /**
-* This is the code that will run tied to the player.
-*
-* The code here might keep running in the background.
-*
-* You should put everything here that should be tied to the playback but not the UI
-* such as processing media buttons or analytics
-*/
+ * This is the code that will run tied to the player.
+ *
+ * The code here might keep running in the background.
+ *
+ * You should put everything here that should be tied to the playback but not the UI
+ * such as processing media buttons or analytics
+ */
 
 import TrackPlayer, { Event, State, type Track } from 'react-native-track-player';
-import store from '@/store';
-import { setTimerDate } from '@/store/sleep-timer';
+import { getSettings } from '@/store/settings/db';
+import { getSleepTimer } from '@/store/sleep-timer/db';
+import { clearSleepTimer } from '@/store/sleep-timer/actions';
 import { driverRegistry } from '@/store/sources/drivers/registry';
 import type { EntityId } from '@/store/types';
+
+
 
 /**
  * Report a playback event to the appropriate source driver.
@@ -68,19 +71,19 @@ export default async function() {
     TrackPlayer.addEventListener(Event.RemotePlay, () => {
         TrackPlayer.play();
     });
-    
+
     TrackPlayer.addEventListener(Event.RemotePause, () => {
         TrackPlayer.pause();
     });
-    
+
     TrackPlayer.addEventListener(Event.RemoteNext, () => {
         TrackPlayer.skipToNext();
     });
-    
+
     TrackPlayer.addEventListener(Event.RemotePrevious, () => {
         TrackPlayer.skipToPrevious();
     });
-    
+
     TrackPlayer.addEventListener(Event.RemoteStop, () => {
         TrackPlayer.reset();
     });
@@ -90,11 +93,10 @@ export default async function() {
     });
 
     TrackPlayer.addEventListener(Event.PlaybackActiveTrackChanged, async (e) => {
-        // Retrieve the current settings from the Redux store
-        const settings = store.getState().settings;
+        const settings = await getSettings();
 
         // GUARD: Only report playback when the setting is enabled
-        if (settings.enablePlaybackReporting && 'track' in e) {
+        if (settings?.enablePlaybackReporting && 'track' in e) {
             // End the previous track session before starting the new one
             if (e.lastTrack) {
                 sendPlaybackEvent('stop', e.lastTrack, e.lastPosition ?? undefined);
@@ -104,28 +106,26 @@ export default async function() {
         }
     });
 
-    TrackPlayer.addEventListener(Event.PlaybackProgressUpdated, () => {
-        // Retrieve the current settings from the Redux store
-        const { settings, sleepTimer } = store.getState();
+    TrackPlayer.addEventListener(Event.PlaybackProgressUpdated, async () => {
+        const [settings, timer] = await Promise.all([getSettings(), getSleepTimer()]);
 
         // GUARD: Only report playback when the setting is enabled
-        if (settings.enablePlaybackReporting) {
+        if (settings?.enablePlaybackReporting) {
             sendPlaybackEvent('progress');
         }
 
-        // check if timerDate is undefined, otherwise start timer
-        if (sleepTimer.date && sleepTimer.date < new Date().valueOf()) {
+        // Check if the sleep timer has elapsed; if so, pause and clear it
+        if (timer?.date && timer.date < Date.now()) {
             TrackPlayer.pause();
-            store.dispatch(setTimerDate(null));
+            clearSleepTimer();
         }
     });
 
-    TrackPlayer.addEventListener(Event.PlaybackState, (event) => {
-        // Retrieve the current settings from the Redux store
-        const settings = store.getState().settings;
+    TrackPlayer.addEventListener(Event.PlaybackState, async (event) => {
+        const settings = await getSettings();
 
         // GUARD: Only report playback when the setting is enabled
-        if (settings.enablePlaybackReporting) {
+        if (settings?.enablePlaybackReporting) {
             if (event.state === State.Stopped) {
                 sendPlaybackEvent('stop');
             } else if (event.state === State.Paused) {
@@ -133,5 +133,4 @@ export default async function() {
             }
         }
     });
-    
 }

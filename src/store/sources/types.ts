@@ -146,10 +146,65 @@ export interface CodecMetadata {
 }
 
 /**
- * Lyrics
+ * A single lyric line as returned by Jellyfin/Emby.
+ * `Start` is in ticks (100-nanosecond units). `Text` is the lyric line.
  */
-export interface Lyrics {
-    lyrics: string;
+export interface LyricLine {
+    Start: number;
+    Text?: string;
+}
+
+/**
+ * Structured lyrics object as returned by the /Audio/{id}/Lyrics endpoint.
+ * Both drivers return the same shape.
+ */
+export interface TrackLyrics {
+    Lyrics: LyricLine[];
+}
+
+/**
+ * Lyrics return type from driver methods — always the structured form.
+ */
+export type Lyrics = TrackLyrics;
+
+/**
+ * A single media stream entry stored in track metadata.
+ * Mirrors the shape returned by both Jellyfin and Emby APIs.
+ */
+export interface TrackMediaStream {
+    Type: 'Audio' | 'Video' | 'Subtitle' | 'EmbeddedImage' | string;
+    Codec?: string;
+    BitRate?: number;
+    SampleRate?: number;
+    Channels?: number;
+    BitDepth?: number;
+}
+
+/**
+ * Codec / playback metadata stored on a track.
+ * Populated by `getTrackCodecMetadata` and stored in the track's `metadata`
+ * column alongside the raw API response.
+ */
+export interface TrackCodecInfo {
+    /** Whether the track is being played directly (true) or transcoded (false). */
+    isDirectPlay: boolean;
+    /** Content-Type header value when transcoding (e.g. "audio/aac"). */
+    contentType?: string;
+}
+
+/**
+ * Shape of the `metadata` JSON column on the `tracks` table.
+ * Contains the full raw API response plus any locally computed fields.
+ */
+export interface TrackMetadata {
+    /** Raw media streams from the source API, if fetched with Fields=MediaStreams. */
+    MediaStreams?: TrackMediaStream[];
+    /** Locally computed codec / playback info. */
+    Codec?: TrackCodecInfo;
+    /** Whether the source reports lyrics are available for this track. */
+    HasLyrics?: boolean;
+    /** Allow additional raw API fields to pass through without breaking the type. */
+    [key: string]: unknown;
 }
 
 /**

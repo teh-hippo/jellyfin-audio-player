@@ -47,6 +47,18 @@ export interface EmbyAlbum extends EmbyBaseItem {
 }
 
 /**
+ * A single media stream entry as returned by the Emby API.
+ */
+export interface EmbyMediaStream {
+    Type: 'Audio' | 'Video' | 'Subtitle' | 'EmbeddedImage' | string;
+    Codec?: string;
+    BitRate?: number;
+    SampleRate?: number;
+    Channels?: number;
+    BitDepth?: number;
+}
+
+/**
  * Track from Emby API
  */
 export interface EmbyTrack extends EmbyBaseItem {
@@ -59,6 +71,8 @@ export interface EmbyTrack extends EmbyBaseItem {
     RunTimeTicks?: number;
     DateCreated?: string;
     ArtistItems?: EmbyArtist[];
+    HasLyrics?: boolean;
+    MediaStreams?: EmbyMediaStream[];
 }
 
 /**

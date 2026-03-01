@@ -2,7 +2,7 @@ import React, { useCallback } from 'react';
 import { useNavigation, StackActions, useRoute, RouteProp } from '@react-navigation/native';
 import { StackParams } from '@/screens/types';
 import { useTrackWithDownload } from '@/store/tracks/hooks';
-import { useIsDownloaded } from '@/store/downloads/hooks';
+
 
 import { Downloads } from '@/store/downloads/download-manager';
 import { Header, SubHeader } from '@/components/Typography';
@@ -41,7 +41,7 @@ function TrackPopupMenu() {
 
 
     const { data: track } = useTrackWithDownload(trackId);
-    const isDownloaded = useIsDownloaded(trackId[1]);
+    const isDownloaded = !!track?.download;
 
     // Set callback to close the modal
     const closeModal = useCallback(() => {

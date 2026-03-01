@@ -577,7 +577,7 @@ export class SourceSync {
 
         // Persist the lyrics (or null) and mark the cursor complete so it won't
         // be retried, then unblock any awaiter of syncLyrics for this track.
-        await updateTrackLyrics([sourceId, trackId], result?.lyrics ?? null);
+        await updateTrackLyrics([sourceId, trackId], result ?? null);
         await markCursorComplete(sourceId, EntityType.LYRICS, trackId);
         this.resolvePromise(sourceId, EntityType.LYRICS, trackId);
     }

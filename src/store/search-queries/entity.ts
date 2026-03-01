@@ -15,7 +15,7 @@ const searchQueries = sqliteTable('search_queries', {
     createdAt: integer('created_at').notNull().$defaultFn(() => Date.now()),
     updatedAt: integer('updated_at').notNull().$defaultFn(() => Date.now()),
 }, (table) => [
-    index('search_queries_source_timestamp_idx').on(table.sourceId, table.timestamp),
+    index('search_queries_source_timestamp_idx').on(table.sourceId, table.createdAt),
 ]);
 
 export default searchQueries;

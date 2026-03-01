@@ -2,6 +2,7 @@ import { useLiveQuery, useFtsQuery } from '@/store/live-queries';
 import { db } from '@/store';
 import type { EntityId } from '@/store/types';
 import type { Track } from './types';
+import { useMemo } from 'react';
 
 /** A track row with its local download entry attached (null when none exists). */
 export type TrackWithDownload = NonNullable<
@@ -70,6 +71,49 @@ export function useTrackSearch(term: string) {
         ['tracks'],
         trimmed.length > 0,
     );
+}
+
+/**
+ * Returns a live map of TrackWithDownload records keyed by track id, for a
+ * given set of EntityIds. Useful for decorating a TrackPlayer queue (which
+ * only holds minimal track info) with DB-backed download state.
+ *
+ * The returned map is re-computed whenever any of the watched tracks or
+ * downloads change in the database.
+ */
+export function useTracksByIds(entityIds: EntityId[]): Map<string, TrackWithDownload> {
+    // Build a stable source-id→[track-ids] grouping so the query changes only
+    // when the actual set of ids changes, not on every render.
+    const grouped = useMemo(() => {
+        const map = new Map<string, string[]>();
+        for (const [sourceId, trackId] of entityIds) {
+            if (!map.has(sourceId)) map.set(sourceId, []);
+            map.get(sourceId)!.push(trackId);
+        }
+        return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [JSON.stringify(entityIds)]);
+
+    // We only support a single sourceId for now — mixed-source queues are not
+    // yet a use-case, so grab the first one.
+    const [[sourceId, trackIds] = [undefined, undefined]] = grouped.entries();
+
+    const { data } = useLiveQuery(
+        sourceId && trackIds?.length
+            ? db.query.tracks.findMany({
+                where: { sourceId, id: { in: trackIds } },
+                with: { download: true },
+            })
+            : undefined
+    );
+
+    return useMemo(() => {
+        const map = new Map<string, TrackWithDownload>();
+        for (const track of (data ?? []) as TrackWithDownload[]) {
+            map.set(track.id, track);
+        }
+        return map;
+    }, [data]);
 }
 
 /**

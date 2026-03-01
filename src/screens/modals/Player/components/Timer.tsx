@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import styled from 'styled-components/native';
 import TimerIcon from '@/assets/icons/timer.svg';
-import { setSleepTimerDate } from '@/store/sleep-timer/db';
+import { setSleepTimer } from '@/store/sleep-timer/actions';
 import { useLiveQuery } from '@/store/live-queries';
 import sleepTimer from '@/store/sleep-timer/entity';
 import { db } from '@/store';
@@ -61,14 +61,14 @@ export default function Timer() {
         selectedDate.setSeconds(0);
 
         // Set the date and close the picker
-        setSleepTimerDate(selectedDate);
+        setSleepTimer(selectedDate.getTime());
         setShowPicker(false);
     }, []);
 
     // Close the picker when it is canceled
     const handleCancelDatePicker = useCallback(() => {
         setShowPicker(false);
-        setSleepTimerDate(null);
+        setSleepTimer(null);
     }, []);
 
     // Show it when it should be opened
