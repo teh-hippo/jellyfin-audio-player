@@ -18,7 +18,7 @@ import { upsertTrackArtists } from '../track-artists/db';
 import { upsertAlbumSimilar } from '../album-similar/db';
 import { setPlaylistTracks } from '../playlist-tracks/db';
 import { updateTrackLyrics } from '../tracks/db';
-import { getAllSourceDrivers } from './actions';
+import { driverRegistry } from './drivers/registry';
 
 // How many items to request per API call. Large enough to minimise round-trips,
 // small enough to keep individual tasks short and resumable.
@@ -32,10 +32,11 @@ interface DeferredPromise {
 }
 
 /**
- * SourceSyncManager
+ * SourceSync
  *
- * Accepts multiple instantiated SourceDrivers and manages syncing their data into
- * the local SQLite database.
+ * Manages syncing data from all registered source drivers into the local SQLite
+ * database. Drivers are resolved on demand through the global driverRegistry
+ * rather than being injected at construction time.
  *
  * Work is persisted as sync_cursor rows before execution, so it survives restarts
  * and can be resumed from the last successful page. Dependent tasks (e.g. album
@@ -47,7 +48,6 @@ interface DeferredPromise {
  * sources that were targeted; for item-level methods it covers the single cursor.
  *
  * Usage:
- *   const manager = new SourceSyncManager([jellyfinDriver, embyDriver]);
  *   // Omit sourceId to sync all known sources simultaneously.
  *   await manager.syncAlbums();
  *   // Pass a sourceId to target a single source.
@@ -56,7 +56,7 @@ interface DeferredPromise {
  *   await manager.syncLyrics([sourceId, trackId]);
  *   await manager.run();
  */
-export class SourceSyncManager {
+export class SourceSync {
     /**
      * The p-queue instance that manages concurrent execution of sync tasks. Each task is a function that returns a Promise, and the queue ensures that no more than
      * `concurrency` tasks run simultaneously. Tasks are added to the queue as cursors
@@ -65,20 +65,11 @@ export class SourceSyncManager {
     private queue: PQueue;
 
     /**
-     * A map of sourceId to SourceDriver, used to look up the appropriate driver for each cursor during execution. This is initialized in the constructor from the array of drivers passed in, and remains static thereafter since drivers are not expected to be added or removed at runtime.
-     */
-    private drivers: Map<string, SourceDriver>;
-
-    /**
      * A map of cursor keys to DeferredPromises, used to track the completion of each cursor. When a cursor is registered via registerCursor(), a DeferredPromise is created and stored in this map under a key derived from the cursor's sourceId, entityType, and parentEntityId. When the corresponding task completes in executeTask(), the promise is resolved and removed from the map, unblocking any awaiter of the sync method that registered it.
      */
     private pending: Map<string, DeferredPromise>;
 
-    constructor(drivers: SourceDriver[], concurrency = 5) {
-        // Index drivers by their sourceId so executeTask() can look them up in O(1).
-        this.drivers = new Map(drivers.map((driver) => (
-            [driver.getSourceId(), driver])
-        ));
+    constructor(concurrency = 5) {
         this.queue = new PQueue({ concurrency });
         this.pending = new Map();
     }
@@ -156,7 +147,9 @@ export class SourceSyncManager {
         parentEntityType?: EntityType,
     ): Promise<void> {
         // Resolve which sources to target — one specific source, or all of them.
-        const sourceIds = sourceId ? [sourceId] : [...this.drivers.keys()];
+        const sourceIds = sourceId
+            ? [sourceId]
+            : [...(await driverRegistry.getAll()).keys()];
 
         // Persist a cursor row for each target source so the work survives a
         // restart, then collect the completion promise for each one.
@@ -257,7 +250,7 @@ export class SourceSyncManager {
 
     private async executeTask(cursor: SyncCursor): Promise<void> {
         // A cursor without a matching driver has nowhere to fetch from — skip it.
-        const driver = this.drivers.get(cursor.sourceId);
+        const driver = await driverRegistry.getById(cursor.sourceId);
         if (!driver) return;
 
         const { sourceId, entityType, parentEntityId, startIndex } = cursor;
@@ -590,10 +583,10 @@ export class SourceSyncManager {
     }
 }
 
-// Build a single shared SyncManager instance from all configured source drivers.
+// Build a single shared Sync instance.
 // Importing this default export gives any module access to the same queue and
 // pending-promise map, so enqueue calls from different parts of the app coordinate
 // correctly rather than operating on separate instances.
-const SyncManager = new SourceSyncManager(await getAllSourceDrivers());
+const Sync = new SourceSync();
 
-export default SyncManager;
+export default Sync;

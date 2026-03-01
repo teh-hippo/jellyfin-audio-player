@@ -5,6 +5,7 @@
  * Driver methods return types compatible with the database schema.
  */
 
+
 import type { Artist as SchemaArtist } from '../artists/types';
 import type { Album as SchemaAlbum } from '../albums/types';
 import type { Track as SchemaTrack } from '../tracks/types';
@@ -177,10 +178,39 @@ export interface DownloadInfo {
 }
 
 /**
+ * Union of all entity types that can have artwork resolved for them.
+ *
+ * Every member carries a `sourceId` (used by the manager to route to the
+ * correct driver) and an `id` (the stable item ID assigned by the source
+ * server). Drivers receive the full entity object so they can inspect any
+ * field — for example, resolving a track's art via its `albumId` column
+ * rather than the track's own ID.
+ */
+export type ArtworkEntity =
+    | SchemaArtist
+    | SchemaAlbum
+    | SchemaTrack
+    | SchemaPlaylist;
+
+/**
+ * Options for artwork URL generation.
+ */
+export interface ArtworkOptions {
+    /** Desired image width in pixels. Drivers may use this for server-side scaling. */
+    width?: number;
+    /** Desired image height in pixels. Drivers may use this for server-side scaling. */
+    height?: number;
+    /** Image quality (0–100). Drivers may use this for server-side compression. */
+    quality?: number;
+    /** Preferred output format (e.g. 'jpeg', 'png', 'webp'). Defaults to 'jpeg'. */
+    format?: string;
+}
+
+/**
  * Source Driver Abstract Class
  *
- * All source drivers (Jellyfin, Emby, etc.) must extend this class
- * Optional methods have default implementations
+ * All source drivers (Jellyfin, Emby, etc.) must extend this class.
+ * Optional methods have default implementations.
  */
 export abstract class SourceDriver {
     protected source: Source;
@@ -316,4 +346,26 @@ export abstract class SourceDriver {
      * Report playback stop
      */
     abstract reportPlaybackStop(trackId: string, positionTicks: number): Promise<void>;
+
+    /**
+     * Get an artwork URL for any entity (album, artist, track, or playlist).
+     *
+     * Returns a fully-qualified URL string that can be passed directly to an
+     * Image component, or `undefined` if the driver cannot produce one (e.g.
+     * because the source URI is missing or the entity has no image).
+     *
+     * Implementations should compose the URL synchronously from the known
+     * `source.uri` and `source.accessToken` — no network call is required.
+     * The full entity object is provided so implementations can inspect any
+     * field — for example, resolving a track's art via its `albumId`.
+     *
+     * @param entity   The full entity object (album, artist, track, or playlist).
+     * @param options  Optional hints for image dimensions, quality, and format.
+     */
+    abstract getArtworkUrl(
+        entity: ArtworkEntity,
+        options?: ArtworkOptions,
+    ): string | undefined;
 }
+
+

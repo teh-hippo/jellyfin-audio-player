@@ -23,6 +23,8 @@ import {
     DownloadOptions,
     DownloadInfo,
     SearchFilterType,
+    ArtworkEntity,
+    ArtworkOptions,
 } from '../../types';
 import type {
     EmbyAlbum,
@@ -700,6 +702,52 @@ export class EmbyDriver extends SourceDriver {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
-        }).catch((err) => console.error('Failed to report playback stop:', err));
+        }).catch(err => console.error('Failed to report playback stop:', err));
+    }
+
+    /**
+     * Get an artwork URL for any entity (album, artist, track, or playlist).
+     *
+     * Emby exposes artwork through the unified `/Items/:id/Images/Primary`
+     * endpoint, which accepts optional server-side scaling and quality parameters.
+     * The access token is appended as a query param so the URL can be used
+     * directly in an <Image> without extra headers.
+     *
+     * For tracks, artwork is stored on the parent album in Emby, so we
+     * resolve via `albumId` when present and fall back to the track's own ID.
+     */
+    getArtworkUrl(
+        entity: ArtworkEntity,
+        options?: ArtworkOptions,
+    ): string | undefined {
+        if (!this.source.uri) {
+            return undefined;
+        }
+
+        // For tracks, prefer the parent album's ID since Emby attaches
+        // album art to the album item, not to individual track items.
+        const imageId = 'albumId' in entity && entity.albumId
+            ? entity.albumId
+            : entity.id;
+
+        const format = options?.format ?? 'jpeg';
+        const params = new URLSearchParams({ format });
+
+        if (options?.width !== undefined) {
+            params.set('maxWidth', options.width.toString());
+        }
+        if (options?.height !== undefined) {
+            params.set('maxHeight', options.height.toString());
+        }
+        if (options?.quality !== undefined) {
+            params.set('quality', options.quality.toString());
+        }
+        if (this.source.accessToken) {
+            params.set('api_key', this.source.accessToken);
+        }
+
+        return encodeURI(
+            `${this.source.uri}/Items/${imageId}/Images/Primary?${params}`,
+        );
     }
 }
