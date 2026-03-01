@@ -2,7 +2,8 @@ import { drizzle } from 'drizzle-orm/op-sqlite';
 import { open } from '@op-engineering/op-sqlite';
 import { migrate } from 'drizzle-orm/op-sqlite/migrator';
 import migrations from './database/migrations/migrations.js';
-import { relations } from './database/relations';
+import { relations, schema } from './database/relations';
+
 import { driverRegistry } from './sources/drivers/registry';
 import Settings from './settings/manager';
 
@@ -14,7 +15,14 @@ export const sqliteDb = open({
 console.log('[DB] Database path:', sqliteDb.getDbPath());
 
 // Create drizzle instance with v2 relations — exported as singleton
-export const db = drizzle(sqliteDb, { relations });
+export const db = drizzle(sqliteDb, { schema, relations, logger: true });
+
+// The v2 relational query builder (db.query) is broken in this beta of drizzle-orm:
+// allRqbV2/getRqbV2 in op-sqlite/session.js call client.execute().rows?._array which is
+// always undefined with the current op-sqlite, returning empty results for every query.
+// The v1 builder (db._query) goes through executeRawAsync instead and works correctly.
+// Replace db.query with db._query until the upstream bug is fixed.
+(db as any).query = (db as any)._query;
 
 /**
  * Run database migrations

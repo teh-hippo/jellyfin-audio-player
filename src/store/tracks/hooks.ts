@@ -10,25 +10,26 @@ export type TrackWithDownload = NonNullable<
 >[number];
 
 export function useTracks() {
-    return useLiveQuery(
-        db.query.tracks.findMany()
-    );
+    return useLiveQuery(() => db.query.tracks.findMany());
 }
 
-export function useTrack([sourceId, id]: EntityId) {
+export function useTrack(entityId: EntityId | null | undefined) {
+    const [sourceId, id] = entityId ?? [];
     return useLiveQuery(
-        db.query.tracks.findFirst({
-            where: { sourceId, id },
-        })
+        () => (sourceId && id)
+            ? db.query.tracks.findFirst({ where: { sourceId, id } })
+            : undefined,
+        [sourceId, id],
     );
 }
 
 export function useTrackWithDownload([sourceId, id]: EntityId) {
     return useLiveQuery(
-        db.query.tracks.findFirst({
+        () => db.query.tracks.findFirst({
             where: { sourceId, id },
             with: { download: true },
-        })
+        }),
+        [sourceId, id],
     );
 }
 
@@ -38,16 +39,16 @@ export function useTrackWithDownload([sourceId, id]: EntityId) {
  * Sorted in the DB by disc number then track number.
  */
 export function useTracksByAlbum([sourceId, albumId]: EntityId) {
-    // TrackWithDownload is inferred from this return type
     return useLiveQuery(
-        db.query.tracks.findMany({
+        () => db.query.tracks.findMany({
             where: { sourceId, albumId },
             with: { download: true },
             orderBy: {
                 parentIndexNumber: 'asc',
                 indexNumber: 'asc',
             },
-        })
+        }),
+        [sourceId, albumId],
     );
 }
 
@@ -99,12 +100,13 @@ export function useTracksByIds(entityIds: EntityId[]): Map<string, TrackWithDown
     const [[sourceId, trackIds] = [undefined, undefined]] = grouped.entries();
 
     const { data } = useLiveQuery(
-        sourceId && trackIds?.length
+        () => (sourceId && trackIds?.length)
             ? db.query.tracks.findMany({
                 where: { sourceId, id: { in: trackIds } },
                 with: { download: true },
             })
-            : undefined
+            : undefined,
+        [sourceId, trackIds],
     );
 
     return useMemo(() => {
@@ -123,7 +125,7 @@ export function useTracksByIds(entityIds: EntityId[]): Map<string, TrackWithDown
  */
 export function useTracksByPlaylist([sourceId, playlistId]: EntityId) {
     const { data, error } = useLiveQuery(
-        db.query.playlistTracks.findMany({
+        () => db.query.playlistTracks.findMany({
             where: { sourceId, playlistId },
             orderBy: { position: 'asc' },
             with: {
@@ -131,7 +133,8 @@ export function useTracksByPlaylist([sourceId, playlistId]: EntityId) {
                     with: { download: true },
                 },
             },
-        })
+        }),
+        [sourceId, playlistId],
     );
 
     return {

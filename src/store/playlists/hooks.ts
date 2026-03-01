@@ -8,9 +8,10 @@ import type { Playlist } from './types';
 
 export function usePlaylists(sourceId?: string) {
     return useLiveQuery(
-        db.query.playlists.findMany({
+        () => db.query.playlists.findMany({
             where: sourceId ? { sourceId } : undefined,
-        })
+        }),
+        [sourceId],
     );
 }
 
@@ -38,8 +39,9 @@ export function usePlaylistSearch(term: string) {
 
 export function usePlaylist([sourceId, id]: [sourceId: string, id: string]) {
     return useLiveQuery(
-        db.query.playlists.findFirst({
+        () => db.query.playlists.findFirst({
             where: { sourceId, id },
-        })
+        }),
+        [sourceId, id],
     );
 }

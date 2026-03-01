@@ -8,25 +8,23 @@ import type { EntityId } from '@/store/types';
 import { groupByAlphabet } from '@/utility/groupByAlphabet';
 
 export function useAlbums() {
-    return useLiveQuery(
-        db.query.albums.findMany()
-    );
+    return useLiveQuery(() => db.query.albums.findMany());
 }
 
 export function useAlbum([sourceId, id]: EntityId) {
     return useLiveQuery(
-        db.query.albums.findFirst({
-            where: { sourceId, id },
-        })
+        () => db.query.albums.findFirst({ where: { sourceId, id } }),
+        [sourceId, id],
     );
 }
 
 export function useRecentAlbums(limit: number = 24) {
     return useLiveQuery(
-        db.query.albums.findMany({
+        () => db.query.albums.findMany({
             orderBy: { createdAt: 'desc' },
             limit,
-        })
+        }),
+        [limit],
     );
 }
 
@@ -37,14 +35,12 @@ export function useRecentAlbums(limit: number = 24) {
  * The '#' section is always placed at the end.
  */
 export function useAlbumsByAlphabet() {
-    const { data } = useLiveQuery(
-        db.query.albums.findMany({
-            orderBy: (albums, { asc }) => [
-                asc(sql`UPPER(COALESCE(${albums.albumArtist}, ${albums.name}))`),
-                asc(sql`UPPER(${albums.name})`),
-            ],
-        })
-    );
+    const { data } = useLiveQuery(() => db.query.albums.findMany({
+        orderBy: (albums, { asc }) => [
+            asc(sql`UPPER(COALESCE(${albums.albumArtist}, ${albums.name}))`),
+            asc(sql`UPPER(${albums.name})`),
+        ],
+    }));
 
     return useMemo(
         () => groupByAlphabet(data ?? [], (album) => album.albumArtist ?? album.name),
@@ -58,17 +54,14 @@ export function useAlbumsByAlphabet() {
  */
 export function useAlbumsByArtist([sourceId, artistId]: EntityId) {
     return useLiveQuery(
-        db.query.artists.findFirst({
+        () => db.query.artists.findFirst({
             where: { sourceId, id: artistId },
             with: { albums: true },
-        })
+        }),
+        [sourceId, artistId],
     );
 }
 
-/**
- * Returns albums that are marked as similar to the given album via the
- * through relation. Pass [album.sourceId, album.id].
- */
 /**
  * Full-text search across albums using the albums_fts virtual table.
  * Searches name and album_artist columns. Returns at most 50 results.
@@ -94,9 +87,10 @@ export function useAlbumSearch(term: string) {
 
 export function useAlbumSimilar([sourceId, albumId]: EntityId) {
     return useLiveQuery(
-        db.query.albums.findFirst({
+        () => db.query.albums.findFirst({
             where: { sourceId, id: albumId },
             with: { similarAlbums: true },
-        })
+        }),
+        [sourceId, albumId],
     );
 }

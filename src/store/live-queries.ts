@@ -10,7 +10,7 @@
  *   from initial fetch.
  */
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback, DependencyList } from "react";
 import { sqliteDb } from '@/store'
 import { QueryPromise } from 'drizzle-orm';
 
@@ -127,18 +127,38 @@ function extractTableNames(sql: string): string[] {
 /**
  * Shim for useLiveQuery that bridges Drizzle ORM with op-sqlite's reactiveExecute.
  *
+ * Accepts a factory function that returns a drizzle query, plus an optional
+ * dependency array (defaults to []). The factory is re-run — and the
+ * subscription re-established — only when the deps change, preventing
+ * unnecessary re-subscriptions on every render.
+ *
+ * @example
+ * // Static query — no deps needed
+ * const { data } = useLiveQuery(() => db.query.sources.findMany());
+ *
+ * // Dynamic query — list deps that should trigger a re-query
+ * const { data } = useLiveQuery(
+ *     () => db.query.tracks.findFirst({ where: { sourceId, id } }),
+ *     [sourceId, id]
+ * );
+ *
  * Based on: https://op-engineering.github.io/op-sqlite/docs/reactive_queries
  * Workaround until drizzle-orm adds native support:
  * https://github.com/drizzle-team/drizzle-orm/issues/2926
  */
 export function useLiveQuery<T>(
-    query: DrizzleQuery<T> | undefined | null
+    queryFn: () => DrizzleQuery<T> | undefined | null,
+    deps: DependencyList = [],
 ): UseLiveQueryResult<T> {
     const [data, setData] = useState<T | null>(null);
     const [error, setError] = useState<Error | undefined>(undefined);
     const unsubscribeRef = useRef<(() => void) | null>(null);
 
-    // Memoize the SQL to avoid re-subscribing on every render
+    // Stable factory — only re-runs when deps change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const stableQueryFn = useCallback(queryFn, deps);
+    const query = useMemo(() => stableQueryFn(), [stableQueryFn]);
+
     const sqlKey = useMemo(() => {
         if (!query) return null;
         try {
@@ -175,14 +195,26 @@ export function useLiveQuery<T>(
                     setError(e);
                 });
 
-            // Subscribe to reactive updates via op-sqlite
+            // Subscribe to reactive updates via op-sqlite.
+            // We intentionally ignore response.rows here because op-sqlite's
+            // reactive callback returns raw SQLite rows that bypass Drizzle's
+            // ORM transformations (column mapping, type coercions, relation
+            // hydration, etc.).  Instead we re-execute the original Drizzle
+            // query so the result always has the correct shape.
             unsubscribeRef.current = sqliteDb.reactiveExecute({
                 query: sql,
                 arguments: params as any[],
                 fireOn,
-                callback: (response) => {
-                    // response.rows contains raw row data from reactive callback
-                    setData(response.rows as T);
+                callback: () => {
+                    query
+                        .then((result: T) => {
+                            setData(result);
+                            setError(undefined);
+                        })
+                        .catch((e: Error) => {
+                            console.error("[useLiveQuery] Reactive re-fetch error:", e);
+                            setError(e);
+                        });
                 },
             });
         } catch (e) {
@@ -196,7 +228,7 @@ export function useLiveQuery<T>(
                 unsubscribeRef.current = null;
             }
         };
-    }, [sqlKey, query]);
+    }, [sqlKey, query]); // query is stable — only changes when deps change
 
     return { data, error };
 }

@@ -14,7 +14,7 @@ import trackArtists from '../track-artists/entity';
 import playlistTracks from '../playlist-tracks/entity';
 import albumSimilar from '../album-similar/entity';
 
-const schema = {
+export const schema = {
     sources, albums, artists, tracks, playlists,
     downloads, settings, sleepTimer, searchQueries, syncCursors,
     albumArtists, trackArtists, playlistTracks, albumSimilar,

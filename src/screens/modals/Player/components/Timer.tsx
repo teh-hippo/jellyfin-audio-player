@@ -42,7 +42,7 @@ export default function Timer() {
     
     // Retrieve sleep timer from database using live query
     const { data: timerRows } = useLiveQuery(
-        db.select().from(sleepTimer).where(eq(sleepTimer.id, 1)).limit(1)
+        () => db.select().from(sleepTimer).where(eq(sleepTimer.id, 1)).limit(1)
     );
     const date = timerRows?.[0]?.date ?? null;
     

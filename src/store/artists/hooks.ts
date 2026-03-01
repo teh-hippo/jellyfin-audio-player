@@ -7,18 +7,20 @@ import type { Artist } from './types';
 
 export function useArtists(sourceId?: string) {
     return useLiveQuery(
-        db.query.artists.findMany({
+        () => db.query.artists.findMany({
             where: sourceId ? { sourceId } : undefined,
             orderBy: (artists, { asc }) => [asc(sql`UPPER(${artists.name})`)],
-        })
+        }),
+        [sourceId],
     );
 }
 
 export function useArtist([sourceId, id]: [sourceId: string, id: string]) {
     return useLiveQuery(
-        db.query.artists.findFirst({
+        () => db.query.artists.findFirst({
             where: { sourceId, id },
-        })
+        }),
+        [sourceId, id],
     );
 }
 
@@ -28,6 +30,21 @@ export function useArtist([sourceId, id]: [sourceId: string, id: string]) {
  * name, or '#' for non-alphabetic names. The '#' section is always placed
  * at the end.
  */
+export function useArtistsByAlphabet(sourceId?: string) {
+    const { data } = useLiveQuery(
+        () => db.query.artists.findMany({
+            where: sourceId ? { sourceId } : undefined,
+            orderBy: (artists, { asc }) => [asc(sql`UPPER(${artists.name})`)],
+        }),
+        [sourceId],
+    );
+
+    return useMemo(
+        () => groupByAlphabet(data ?? [], (artist) => artist.name),
+        [data],
+    );
+}
+
 /**
  * Full-text search across artists using the artists_fts virtual table.
  * Searches the name column. Returns at most 50 results.
@@ -47,19 +64,5 @@ export function useArtistSearch(term: string) {
         [matchTerm],
         ['artists'],
         trimmed.length > 0,
-    );
-}
-
-export function useArtistsByAlphabet(sourceId?: string) {
-    const { data } = useLiveQuery(
-        db.query.artists.findMany({
-            where: sourceId ? { sourceId } : undefined,
-            orderBy: (artists, { asc }) => [asc(sql`UPPER(${artists.name})`)],
-        })
-    );
-
-    return useMemo(
-        () => groupByAlphabet(data ?? [], (artist) => artist.name),
-        [data],
     );
 }

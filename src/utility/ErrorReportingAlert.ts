@@ -5,25 +5,20 @@ import Settings from '@/store/settings/manager';
 import { setSentryStatus } from './Sentry';
 import { useNavigation } from '@react-navigation/native';
 import { NavigationProp } from '@/screens/types';
-import { useLiveQuery } from '@/store/live-queries';
-import { db } from '@/store';
-import appSettings from '@/store/settings/entity';
-import { eq } from 'drizzle-orm';
+import { useAppSettings } from '@/store/settings/hooks';
 
 /**
  * This will send out an alert message asking the user if they want to enable
  * error reporting.
  */
 export default function ErrorReportingAlert() {
-    const { data: settings } = useLiveQuery(
-        db.select().from(appSettings).where(eq(appSettings.id, 1)).limit(1)
-    );
-    const hasReceivedErrorReportingAlert = settings?.[0]?.hasReceivedErrorReportingAlert ?? false;
+    const { data: settings } = useAppSettings();
+    const hasReceivedErrorReportingAlert = settings?.hasReceivedErrorReportingAlert;
     const navigation = useNavigation<NavigationProp>();
 
     useEffect(() => {
-        // Only send out alert if we haven't done so ever
-        if (!hasReceivedErrorReportingAlert) {
+        // Only send out alert if settings have loaded and we haven't done so ever
+        if (hasReceivedErrorReportingAlert === false) {
             // Generate the alert
             Alert.alert(
                 t('enable-error-reporting'),

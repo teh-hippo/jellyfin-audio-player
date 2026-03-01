@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useMemo } from 'react';
+import React, { useRef, useCallback, memo } from 'react';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import { debounce } from 'lodash';
 import { SourceType, SourceCredentials } from '@/store/sources/types';
@@ -52,20 +52,21 @@ type CredentialEventData = {
 const CredentialGenerator: React.FC<Props> = ({ serverUrl, onCredentialsRetrieved }) => {
     const webViewRef = useRef<WebView>(null);
 
-    const checkIfCredentialsAreThere = useMemo(() => debounce(() => {
+    const checkIfCredentialsAreThere = useCallback(() => {
+        console.log('Checking for credentials in WebView localStorage...');
         webViewRef.current?.injectJavaScript(`
-            try { 
+            try {
                 let credentials = JSON.parse(window.localStorage.getItem('jellyfin_credentials'));
                 let deviceId = window.localStorage.getItem('_deviceId2');
-                window.ReactNativeWebView.postMessage(JSON.stringify({ credentials, deviceId, type: 'jellyfin.v1' })) 
+                window.ReactNativeWebView.postMessage(JSON.stringify({ credentials, deviceId, type: 'jellyfin.v1' }))
             } catch(e) { }; true;
-            try {  
+            try {
                 let credentials = JSON.parse(window.localStorage.getItem('servercredentials3'));
                 let deviceId = window.localStorage.getItem('_deviceId2');
-                window.ReactNativeWebView.postMessage(JSON.stringify({ credentials, deviceId, type: 'emby.v1' })) 
+                window.ReactNativeWebView.postMessage(JSON.stringify({ credentials, deviceId, type: 'emby.v1' }))
             } catch(e) { }; true;
         `);
-    }, 500), []);
+    }, []);
 
     const handleMessage = useCallback(async (event: WebViewMessageEvent) => {
         // GUARD: Something must be returned for this thing to work
@@ -75,7 +76,7 @@ const CredentialGenerator: React.FC<Props> = ({ serverUrl, onCredentialsRetrieve
 
         // Parse the content
         const data = JSON.parse(event.nativeEvent.data) as CredentialEventData;
-    
+
         if (__DEV__) {
             console.log('Received credential event data: ', JSON.stringify(data));
         }
@@ -145,11 +146,12 @@ const CredentialGenerator: React.FC<Props> = ({ serverUrl, onCredentialsRetrieve
         });
     }, [onCredentialsRetrieved]);
 
-
     return (
         <WebView
             source={{ uri: serverUrl as string }}
-            onNavigationStateChange={checkIfCredentialsAreThere}
+            onLoadEnd={() => checkIfCredentialsAreThere}
+            // onLoadEnd={console.log}
+            onError={console.error}
             onMessage={handleMessage}
             ref={webViewRef}
             startInLoadingState={true}
@@ -157,4 +159,4 @@ const CredentialGenerator: React.FC<Props> = ({ serverUrl, onCredentialsRetrieve
     );
 };
 
-export default CredentialGenerator;
+export default memo(CredentialGenerator);

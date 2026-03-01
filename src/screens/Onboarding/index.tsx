@@ -28,7 +28,7 @@ const Text = styled(BaseText)`
 
 const ButtonContainer = styled.View`
     margin-top: 50px;
-`; 
+`;
 
 const Logo = styled.Image`
     width: 150px;
@@ -41,14 +41,14 @@ const Logo = styled.Image`
 
 function Onboarding() {
     // Get account from database
-    const { data: sourceData } = useLiveQuery(db.select().from(sources).limit(1));
+    const { data: sourceData } = useLiveQuery(() => db.query.sources.findMany());
     const account = sourceData?.[0];
 
     // Also retrieve the navigation handler so that we can open the modal in
     // which the Jellyfin server is set
     const navigation = useNavigation<NavigationProp>();
     const handleClick = useCallback(() => navigation.navigate('SetJellyfinServer'), [navigation]);
-    
+
     // We'll also respond to any change in the account, setting the onboarding
     // status to true, so that the app becomes available.
     useEffect(() => {
@@ -56,7 +56,7 @@ function Onboarding() {
             Settings.update({ isOnboardingComplete: true });
         }
     }, [account]);
-    
+
     return (
         <Container>
             <TextContainer contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}>

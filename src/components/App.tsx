@@ -6,7 +6,7 @@ import {
     DefaultTheme,
     DarkTheme as BaseDarkTheme,
 } from '@react-navigation/native';
-import { ColorSchemeProvider, themes, useUserOrSystemScheme } from './Colors';
+import { ColorSchemeProvider, themes, useScheme } from './Colors';
 
 import AppLoading from './AppLoading';
 import { captureException } from '@sentry/react-native';
@@ -33,7 +33,7 @@ const DarkTheme = {
  * right theme is selected based on OS color scheme settings along with user preferences.
  */
 function ThemedNavigationContainer({ children }: PropsWithChildren<{}>) {
-    const scheme = useUserOrSystemScheme();
+    const scheme = useScheme();
 
     return (
         <NavigationContainer

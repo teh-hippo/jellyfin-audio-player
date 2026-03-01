@@ -20,7 +20,7 @@ export default function useCurrentTrack(): CurrentTrackResponse {
     // Look up the full track record from the database using the entity ID
     // stored on the player track. entityId is set to [sourceId, itemId] when
     // the track is generated, which maps directly to the DB primary key.
-    const { data: albumTrack } = useTrack(track?.entityId);
+    const { data: albumTrack } = useTrack(track?.entityId ?? [undefined, undefined]);
 
     // Attempt to retrieve the currently active track on mount
     useEffect(() => {

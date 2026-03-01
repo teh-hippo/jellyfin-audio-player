@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { Button, View } from 'react-native';
 import { SourceCredentials } from '@/store/sources/types';
 import Modal from '@/components/Modal';
@@ -21,12 +21,15 @@ export default function SetJellyfinServer() {
     const navigation = useNavigation();
 
     // Save creedentials to store and close the modal
+    const saveCredentialsRef = useRef<typeof navigation>(navigation);
+    saveCredentialsRef.current = navigation;
+
     const saveCredentials = useCallback((credentials?: SourceCredentials) => {
         if (credentials) {
             setCredentials(credentials);
-            navigation.dispatch(StackActions.popToTop());
+            saveCredentialsRef.current.dispatch(StackActions.popToTop());
         }
-    }, [navigation]);
+    }, []);
 
     return (
         <Modal>

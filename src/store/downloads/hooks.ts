@@ -8,17 +8,19 @@ export type DownloadWithTrack = NonNullable<
 
 export function useDownloads(sourceId?: string) {
     return useLiveQuery(
-        db.query.downloads.findMany({
+        () => db.query.downloads.findMany({
             where: sourceId ? { sourceId } : undefined,
             with: { track: true },
-        })
+        }),
+        [sourceId],
     );
 }
 
 export function useDownload([sourceId, trackId]: [sourceId: string, trackId: string]) {
     return useLiveQuery(
-        db.query.downloads.findFirst({
+        () => db.query.downloads.findFirst({
             where: { sourceId, id: trackId },
-        })
+        }),
+        [sourceId, trackId],
     );
 }

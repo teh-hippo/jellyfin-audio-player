@@ -72,6 +72,10 @@ export class SourceSync {
     constructor(concurrency = 5) {
         this.queue = new PQueue({ concurrency });
         this.pending = new Map();
+
+        this.queue.on('next', () => {
+            console.log('[SYNC] Starting next task. Queue size:', this.queue.size);
+        })
     }
 
     // -------------------------------------------------------------------------

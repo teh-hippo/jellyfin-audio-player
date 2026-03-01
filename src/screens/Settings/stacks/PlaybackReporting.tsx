@@ -1,20 +1,15 @@
 import { Paragraph } from '@/components/Typography';
 import React, { useCallback } from 'react';
-import { Switch } from 'react-native-gesture-handler';
+import { Switch } from 'react-native';
 import { t } from '@/localisation';
-import { useLiveQuery } from '@/store/live-queries';
-import { db } from '@/store';
-import appSettings from '@/store/settings/entity';
-import { eq } from 'drizzle-orm';
 import Settings from '@/store/settings/manager';
 import Container from '../components/Container';
 import { SwitchContainer, SwitchLabel } from '../components/Switch';
+import { useAppSettings } from '@/store/settings/hooks';
 
 export default function PlaybackReporting() {
-    const { data: settings } = useLiveQuery(
-        db.select().from(appSettings).where(eq(appSettings.id, 1)).limit(1)
-    );
-    const isEnabled = settings?.[0]?.enablePlaybackReporting ?? true;
+    const { data: settings } = useAppSettings();
+    const isEnabled = settings?.enablePlaybackReporting ?? true;
 
     const toggleSwitch = useCallback(() => {
         Settings.update({ enablePlaybackReporting: !isEnabled });
