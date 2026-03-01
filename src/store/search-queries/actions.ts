@@ -4,8 +4,9 @@
 
 import { db, sqliteDb } from '@/store';
 import searchQueries from './entity';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { InsertSearchQuery } from './types';
+import type { EntityId } from '@/store/types';
 
 export async function upsertSearchQuery(query: InsertSearchQuery): Promise<void> {
     const now = Date.now();
@@ -25,8 +26,8 @@ export async function upsertSearchQuery(query: InsertSearchQuery): Promise<void>
     sqliteDb.flushPendingReactiveQueries();
 }
 
-export async function deleteSearchQuery(id: string): Promise<void> {
-    await db.delete(searchQueries).where(eq(searchQueries.id, id));
+export async function deleteSearchQuery([sourceId, id]: EntityId): Promise<void> {
+    await db.delete(searchQueries).where(and(eq(searchQueries.sourceId, sourceId), eq(searchQueries.id, id)));
     sqliteDb.flushPendingReactiveQueries();
 }
 

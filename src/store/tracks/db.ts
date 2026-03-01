@@ -1,6 +1,7 @@
 import { db, sqliteDb } from '@/store';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import tracks from './entity';
+import type { EntityId } from '@/store/types';
 
 /**
  * Update lyrics content for a track.
@@ -9,12 +10,12 @@ import tracks from './entity';
  * last-modified date, not local operations. lastSyncedAt is bumped automatically
  * by the schema $onUpdateFn.
  */
-export async function updateTrackLyrics(trackId: string, lyrics: string | null): Promise<void> {
+export async function updateTrackLyrics([sourceId, trackId]: EntityId, lyrics: string | null): Promise<void> {
     await db.update(tracks)
         .set({
             lyrics,
         })
-        .where(eq(tracks.id, trackId));
+        .where(and(eq(tracks.sourceId, sourceId), eq(tracks.id, trackId)));
 
     sqliteDb.flushPendingReactiveQueries();
 }

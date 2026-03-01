@@ -1,32 +1,32 @@
 import { db, sqliteDb } from '@/store';
 import downloads from './entity';
 import type { Download } from './types';
-import { eq } from 'drizzle-orm';
+import type { EntityId } from '@/store/types';
+import { and, eq } from 'drizzle-orm';
 
 export async function getAllDownloads(): Promise<Download[]> {
     const result = await db.select().from(downloads);
     return result as Download[];
 }
 
-export async function getDownload(id: string): Promise<Download | undefined> {
+export async function getDownload([sourceId, id]: EntityId): Promise<Download | undefined> {
     const result = await db
         .select()
         .from(downloads)
-        .where(eq(downloads.id, id))
+        .where(and(eq(downloads.sourceId, sourceId), eq(downloads.id, id)))
         .limit(1);
-    
+
     return result[0] as Download | undefined;
 }
 
 export async function initializeDownload(
-    sourceId: string,
-    id: string,
+    [sourceId, id]: EntityId,
     hash?: string,
     filename?: string,
     mimetype?: string
 ): Promise<void> {
     const now = Date.now();
-    
+
     await db.insert(downloads).values({
         sourceId,
         id,
@@ -56,7 +56,7 @@ export async function initializeDownload(
 }
 
 export async function updateDownloadProgress(
-    id: string,
+    [sourceId, id]: EntityId,
     progress: number
 ): Promise<void> {
     await db.update(downloads)
@@ -64,16 +64,16 @@ export async function updateDownloadProgress(
             progress,
             updatedAt: Date.now(),
         })
-        .where(eq(downloads.id, id));
+        .where(and(eq(downloads.sourceId, sourceId), eq(downloads.id, id)));
 
     sqliteDb.flushPendingReactiveQueries();
 }
 
 export async function completeDownload(
-    id: string,
+    [sourceId, id]: EntityId,
     filename?: string
 ): Promise<void> {
-    const updates: any = {
+    const updates: Partial<typeof downloads.$inferInsert> = {
         isComplete: true,
         isFailed: false,
         progress: 1,
@@ -86,12 +86,12 @@ export async function completeDownload(
 
     await db.update(downloads)
         .set(updates)
-        .where(eq(downloads.id, id));
+        .where(and(eq(downloads.sourceId, sourceId), eq(downloads.id, id)));
 
     sqliteDb.flushPendingReactiveQueries();
 }
 
-export async function failDownload(id: string): Promise<void> {
+export async function failDownload([sourceId, id]: EntityId): Promise<void> {
     await db.update(downloads)
         .set({
             isFailed: true,
@@ -99,12 +99,13 @@ export async function failDownload(id: string): Promise<void> {
             progress: 0,
             updatedAt: Date.now(),
         })
-        .where(eq(downloads.id, id));
+        .where(and(eq(downloads.sourceId, sourceId), eq(downloads.id, id)));
 
     sqliteDb.flushPendingReactiveQueries();
 }
 
-export async function removeDownload(id: string): Promise<void> {
-    await db.delete(downloads).where(eq(downloads.id, id));
+export async function removeDownload([sourceId, id]: EntityId): Promise<void> {
+    await db.delete(downloads)
+        .where(and(eq(downloads.sourceId, sourceId), eq(downloads.id, id)));
     sqliteDb.flushPendingReactiveQueries();
 }

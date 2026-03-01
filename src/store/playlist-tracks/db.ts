@@ -1,14 +1,14 @@
 import { db, sqliteDb } from '@/store';
 import { eq, and } from 'drizzle-orm';
 import playlistTracks from './entity';
+import type { EntityId } from '@/store/types';
 
 /**
  * Replaces all tracks for a playlist with the provided ordered list of track IDs.
  * Deletes existing entries first to handle removals and reordering.
  */
 export async function setPlaylistTracks(
-    sourceId: string,
-    playlistId: string,
+    [sourceId, playlistId]: EntityId,
     trackIds: string[],
 ): Promise<void> {
     await db.delete(playlistTracks).where(

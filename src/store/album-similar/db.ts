@@ -1,9 +1,9 @@
 import { db, sqliteDb } from '@/store';
 import albumSimilar from './entity';
+import type { EntityId } from '@/store/types';
 
 export async function upsertAlbumSimilar(
-    sourceId: string,
-    albumId: string,
+    [sourceId, albumId]: EntityId,
     similarAlbumIds: string[],
 ): Promise<void> {
     if (similarAlbumIds.length === 0) return;

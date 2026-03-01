@@ -14,8 +14,8 @@ const downloads = sqliteTable('downloads', {
     isFailed: integer('is_failed', { mode: 'boolean' }).notNull(),
     isComplete: integer('is_complete', { mode: 'boolean' }).notNull(),
     metadata: text('metadata'), // JSON-encoded additional fields
-    createdAt: integer('created_at').notNull(),
-    updatedAt: integer('updated_at').notNull(),
+    createdAt: integer('created_at').notNull().$defaultFn(() => Date.now()),
+    updatedAt: integer('updated_at').notNull().$defaultFn(() => Date.now()).$onUpdateFn(() => Date.now()),
 });
 
 export default downloads;

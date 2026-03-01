@@ -4,7 +4,8 @@
 
 import { db, sqliteDb } from '@/store';
 import albums from './entity';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
+import type { EntityId } from '@/store/types';
 import type { InsertAlbum } from './types';
 import { getAllSourceDrivers } from '../sources/actions';
 
@@ -46,8 +47,8 @@ export async function upsertAlbums(albumList: UpsertAlbum[]): Promise<void> {
     }
 }
 
-export async function deleteAlbum(id: string): Promise<void> {
-    await db.delete(albums).where(eq(albums.id, id));
+export async function deleteAlbum([sourceId, id]: EntityId): Promise<void> {
+    await db.delete(albums).where(and(eq(albums.sourceId, sourceId), eq(albums.id, id)));
     sqliteDb.flushPendingReactiveQueries();
 }
 
@@ -58,5 +59,5 @@ export async function deleteAlbumsBySource(sourceId: string): Promise<void> {
 
 export async function refreshAlbums(): Promise<void> {
     // TODO: implement per-driver refresh logic
-    await getAllSourceDrivers();
+    (await getAllSourceDrivers()).forEach((driver) => driver.getAlbums());
 }

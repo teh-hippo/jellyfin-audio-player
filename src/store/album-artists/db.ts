@@ -1,5 +1,6 @@
 import { db, sqliteDb } from '@/store';
 import albumArtists from './entity';
+import type { EntityId } from '@/store/types';
 import type { Artist } from '../sources/types';
 
 /**
@@ -7,8 +8,7 @@ import type { Artist } from '../sources/types';
  * Preserves order from the source by storing orderIndex.
  */
 export async function upsertAlbumArtists(
-    sourceId: string,
-    albumId: string,
+    [sourceId, albumId]: EntityId,
     artistItems: Pick<Artist, 'id'>[],
 ): Promise<void> {
     if (artistItems.length === 0) return;

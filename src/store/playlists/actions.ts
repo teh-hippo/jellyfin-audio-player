@@ -4,8 +4,9 @@
 
 import { db, sqliteDb } from '@/store';
 import playlists from './entity';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { InsertPlaylist } from './types';
+import type { EntityId } from '@/store/types';
 
 /**
  * createdAt and updatedAt are optional — they reflect server-provided timestamps
@@ -43,8 +44,8 @@ export async function upsertPlaylists(playlistList: UpsertPlaylist[]): Promise<v
     }
 }
 
-export async function deletePlaylist(id: string): Promise<void> {
-    await db.delete(playlists).where(eq(playlists.id, id));
+export async function deletePlaylist([sourceId, id]: EntityId): Promise<void> {
+    await db.delete(playlists).where(and(eq(playlists.sourceId, sourceId), eq(playlists.id, id)));
     sqliteDb.flushPendingReactiveQueries();
 }
 

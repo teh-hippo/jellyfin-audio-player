@@ -1,9 +1,9 @@
 import { db, sqliteDb } from '@/store';
 import trackArtists from './entity';
+import type { EntityId } from '@/store/types';
 
 export async function upsertTrackArtists(
-    sourceId: string,
-    trackId: string,
+    [sourceId, trackId]: EntityId,
     artistItems: { id: string }[],
 ): Promise<void> {
     if (artistItems.length === 0) return;
