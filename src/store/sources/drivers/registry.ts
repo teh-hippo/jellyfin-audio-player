@@ -35,14 +35,22 @@ class DriverRegistry {
      */
     private initPromise: Promise<Map<string, SourceDriver>> | null = null;
 
-    constructor() {
-        // Eagerly build the registry on startup so drivers are ready by the time the UI needs them.
-        this.initPromise = this.build();
-    }
-
     // -------------------------------------------------------------------------
     // Public API
     // -------------------------------------------------------------------------
+
+    /**
+     * Explicitly initialise the registry by loading all source rows from the
+     * database and instantiating their drivers.
+     *
+     * Must be called after database migrations have completed (i.e. from
+     * `initialiseDatabase`) so that the `sources` table exists before the
+     * first query is made. Subsequent calls are no-ops if the cache is already
+     * warm.
+     */
+    async initialise(): Promise<void> {
+        await this.getAll();
+    }
 
     /**
      * Return a map of every registered driver, keyed by sourceId.

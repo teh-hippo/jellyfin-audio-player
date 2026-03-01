@@ -2,7 +2,7 @@ import React, { useCallback, useEffect } from 'react';
 import styled from 'styled-components/native';
 import { useNavigation } from '@react-navigation/native';
 import { NavigationProp } from '@/screens';
-import { updateAppSettings } from '@/store/settings/actions';
+import Settings from '@/store/settings/manager';
 import { t } from '@/localisation';
 import Button from '@/components/Button';
 import { Header, Text as BaseText } from '@/components/Typography';
@@ -53,7 +53,7 @@ function Onboarding() {
     // status to true, so that the app becomes available.
     useEffect(() => {
         if (account) {
-            updateAppSettings({ isOnboardingComplete: true });
+            Settings.update({ isOnboardingComplete: true });
         }
     }, [account]);
     

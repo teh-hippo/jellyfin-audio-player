@@ -8,13 +8,11 @@
  */
 
 import TrackPlayer, { Event, State, type Track } from 'react-native-track-player';
-import { getSettings } from '@/store/settings/db';
+import Settings from '@/store/settings/manager';
 import { getSleepTimer } from '@/store/sleep-timer/db';
 import { clearSleepTimer } from '@/store/sleep-timer/actions';
 import { driverRegistry } from '@/store/sources/drivers/registry';
 import type { EntityId } from '@/store/types';
-
-
 
 /**
  * Report a playback event to the appropriate source driver.
@@ -93,10 +91,8 @@ export default async function() {
     });
 
     TrackPlayer.addEventListener(Event.PlaybackActiveTrackChanged, async (e) => {
-        const settings = await getSettings();
-
         // GUARD: Only report playback when the setting is enabled
-        if (settings?.enablePlaybackReporting && 'track' in e) {
+        if (Settings.get('enablePlaybackReporting') && 'track' in e) {
             // End the previous track session before starting the new one
             if (e.lastTrack) {
                 sendPlaybackEvent('stop', e.lastTrack, e.lastPosition ?? undefined);
@@ -107,10 +103,10 @@ export default async function() {
     });
 
     TrackPlayer.addEventListener(Event.PlaybackProgressUpdated, async () => {
-        const [settings, timer] = await Promise.all([getSettings(), getSleepTimer()]);
+        const timer = await getSleepTimer();
 
         // GUARD: Only report playback when the setting is enabled
-        if (settings?.enablePlaybackReporting) {
+        if (Settings.get('enablePlaybackReporting')) {
             sendPlaybackEvent('progress');
         }
 
@@ -122,10 +118,8 @@ export default async function() {
     });
 
     TrackPlayer.addEventListener(Event.PlaybackState, async (event) => {
-        const settings = await getSettings();
-
         // GUARD: Only report playback when the setting is enabled
-        if (settings?.enablePlaybackReporting) {
+        if (Settings.get('enablePlaybackReporting')) {
             if (event.state === State.Stopped) {
                 sendPlaybackEvent('stop');
             } else if (event.state === State.Paused) {

@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { Button, View } from 'react-native';
 import Modal from '@/components/Modal';
 import Input from '@/components/Input';
-import { setCredentials } from '@/store/settings/actions';
+import { setCredentials } from '@/store/sources/actions';
 import { useNavigation, StackActions } from '@react-navigation/native';
 import CredentialGenerator from './components/CredentialGenerator';
 import { t } from '@/localisation';

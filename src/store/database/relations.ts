@@ -86,7 +86,7 @@ export const relations = defineRelations(schema, (r) => ({
             to: r.sources.id,
             optional: false,
         }),
-        album: r.one.albums({
+        parentAlbum: r.one.albums({
             from: r.tracks.albumId,
             to: r.albums.id,
         }),

@@ -16,7 +16,7 @@
  *   <DocumentDirectoryPath>/artwork/<sourceId>_<trackId>.jpg
  *
  * Execution flow for a single track:
- *   enqueue() → initializeDownload() → queue.add(executeDownload())
+ *   enqueue() → initialiseDownload() → queue.add(executeDownload())
  *   executeDownload() → driverRegistry → driver.getDownloadInfo()   → RNFS.downloadFile() (audio)
  *                                      → driver.getArtworkUrl()     → RNFS.downloadFile() (artwork)
  *                    → completeDownload() | failDownload()
@@ -28,7 +28,7 @@ import { driverRegistry } from '@/store/sources/drivers/registry';
 import type { SourceDriver } from '@/store/sources/types';
 import { getMimeTypeForExtension } from '@/utility/mimeType';
 import {
-    initializeDownload,
+    initialiseDownload,
     completeDownload,
     failDownload,
     removeDownload,
@@ -210,7 +210,7 @@ class DownloadQueue {
         // immediately without needing to re-transfer any data.
         await Promise.all(
             audioFiles.map(async ({ sourceId, trackId, filename, mimeType, fileSize }) => {
-                await initializeDownload([sourceId, trackId], { filename, mimetype: mimeType, fileSize });
+                await initialiseDownload([sourceId, trackId], { filename, mimetype: mimeType, fileSize });
                 await completeDownload([sourceId, trackId], { filename, fileSize });
             })
         );
@@ -256,7 +256,7 @@ class DownloadQueue {
 
             // Persist the MIME type and target path before the transfer begins
             // so the row reflects intent even if the app is killed mid-download.
-            await initializeDownload(entityId, { mimetype, filename: audioPath });
+            await initialiseDownload(entityId, { mimetype, filename: audioPath });
 
             // ---- Audio transfer --------------------------------------------------
 

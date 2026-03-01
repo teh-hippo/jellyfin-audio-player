@@ -13,21 +13,21 @@ export async function getDownload([sourceId, id]: EntityId) {
     });
 }
 
-export interface InitializeDownloadParams {
+export interface InitialiseDownloadParams {
     filename: string;
     mimetype: string;
     hash?: string;
     fileSize?: number;
 }
 
-export async function initializeDownload(
+export async function initialiseDownload(
     [sourceId, id]: EntityId,
     {
         filename,
         mimetype,
         hash,
         fileSize,
-    }: InitializeDownloadParams
+    }: InitialiseDownloadParams
 ): Promise<void> {
     await db.insert(downloads).values({
         sourceId,

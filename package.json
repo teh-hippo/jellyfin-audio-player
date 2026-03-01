@@ -88,5 +88,8 @@
     "react-native-svg-transformer": "1.5.2",
     "tslib": "2.8.1",
     "typescript": "5.9.3"
+  },
+  "op-sqlite": {
+    "fts5": true
   }
 }

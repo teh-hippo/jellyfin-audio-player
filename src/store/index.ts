@@ -3,12 +3,15 @@ import { open } from '@op-engineering/op-sqlite';
 import { migrate } from 'drizzle-orm/op-sqlite/migrator';
 import migrations from './database/migrations/migrations.js';
 import { relations } from './database/relations';
+import { driverRegistry } from './sources/drivers/registry';
+import Settings from './settings/manager';
 
 // Open the SQLite database
 export const sqliteDb = open({
     name: 'fintunes.db',
-    location: '../databases',
 });
+
+console.log('[DB] Database path:', sqliteDb.getDbPath());
 
 // Create drizzle instance with v2 relations — exported as singleton
 export const db = drizzle(sqliteDb, { relations });
@@ -27,10 +30,25 @@ export async function runMigrations() {
     }
 }
 
+// Singleton promise so that concurrent calls to initialiseDatabase (e.g. from
+// React Fast Refresh double-mounting) share a single in-flight initialisation
+// rather than racing against each other and re-running migrations.
+let initialisationPromise: Promise<typeof db> | null = null;
+
 /**
- * Initialize the database
+ * Initialise the database.
+ * Safe to call multiple times — subsequent calls return the same promise.
  */
-export async function initializeDatabase() {
-    await runMigrations();
-    return db;
+export function initialiseDatabase(): Promise<typeof db> {
+    if (!initialisationPromise) {
+        initialisationPromise = (async () => {
+            await runMigrations();
+            await Promise.all([
+                driverRegistry.initialise(),
+                Settings.initialise(),
+            ]);
+            return db;
+        })();
+    }
+    return initialisationPromise;
 }

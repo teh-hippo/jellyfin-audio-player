@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Alert } from 'react-native';
 import { t } from '@/localisation';
-import { updateAppSettings } from '@/store/settings/actions';
+import Settings from '@/store/settings/manager';
 import { setSentryStatus } from './Sentry';
 import { useNavigation } from '@react-navigation/native';
 import { NavigationProp } from '@/screens/types';
@@ -55,7 +55,7 @@ export default function ErrorReportingAlert() {
 
             // Store the flag that we have sent out the alert, so that we don't
             // have to do so anymore in the future.
-            updateAppSettings({ hasReceivedErrorReportingAlert: true });
+            Settings.update({ hasReceivedErrorReportingAlert: true });
         }
         
     }, [hasReceivedErrorReportingAlert, navigation]);

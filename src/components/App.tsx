@@ -10,6 +10,7 @@ import { ColorSchemeProvider, themes, useUserOrSystemScheme } from './Colors';
 
 import AppLoading from './AppLoading';
 import { captureException } from '@sentry/react-native';
+import AppDatabaseProvider from './AppDatabaseProvider';
 
 const LightTheme = {
     ...DefaultTheme,
@@ -83,10 +84,12 @@ export default function App(): React.JSX.Element | null {
     }
 
     return (
-        <ColorSchemeProvider>
-            <ThemedNavigationContainer>
-                <Routes />
-            </ThemedNavigationContainer>
-        </ColorSchemeProvider>
+        <AppDatabaseProvider>
+            <ColorSchemeProvider>
+                <ThemedNavigationContainer>
+                    <Routes />
+                </ThemedNavigationContainer>
+            </ColorSchemeProvider>
+        </AppDatabaseProvider>
     );
 }

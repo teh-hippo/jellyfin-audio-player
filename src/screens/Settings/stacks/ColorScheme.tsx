@@ -4,7 +4,7 @@ import Container from '../components/Container';
 import { t } from '@/localisation';
 import { RadioItem, RadioList } from '../components/Radio';
 import { ColorScheme } from '@/store/settings/types';
-import { updateAppSettings } from '@/store/settings/actions';
+import Settings from '@/store/settings/manager';
 import { useAppSettings } from '@/store/settings/hooks';
 
 export default function ColorSchemeSetting() {
@@ -12,7 +12,7 @@ export default function ColorSchemeSetting() {
     const scheme = settings?.colorScheme || ColorScheme.System;
 
     const handlePress = useCallback((value: ColorScheme) => {
-        updateAppSettings({ colorScheme: value });
+        Settings.update({ colorScheme: value });
     }, []);
 
     return (
