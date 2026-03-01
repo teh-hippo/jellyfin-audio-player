@@ -14,6 +14,84 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { sqliteDb } from '@/store'
 import { QueryPromise } from 'drizzle-orm';
 
+export type UseFtsQueryResult<T> = {
+    data: T[];
+    error: Error | undefined;
+};
+
+/**
+ * Reactive hook for raw FTS5 MATCH queries that can't be expressed through
+ * drizzle's query builder. Subscribes to changes on the given `watchTables`
+ * and re-executes the query whenever any of them are written to.
+ *
+ * @param sql        Raw SQL string with `?` placeholders.
+ * @param params     Positional parameters for the placeholders.
+ * @param watchTables Base table names to watch for reactive updates (e.g. `['albums']`).
+ *                   Use the real content tables, not the FTS shadow tables — writes
+ *                   flow through the real tables via triggers.
+ * @param enabled    Set to false to skip the query entirely (e.g. when the search
+ *                   term is empty). Defaults to true.
+ */
+export function useFtsQuery<T>(
+    rawSql: string,
+    params: unknown[],
+    watchTables: string[],
+    enabled: boolean = true,
+): UseFtsQueryResult<T> {
+    const [data, setData] = useState<T[]>([]);
+    const [error, setError] = useState<Error | undefined>(undefined);
+    const unsubscribeRef = useRef<(() => void) | null>(null);
+
+    // Stable key so we only re-subscribe when the query or params actually change
+    const queryKey = useMemo(
+        () => enabled ? JSON.stringify({ rawSql, params }) : null,
+        [enabled, rawSql, params],
+    );
+
+    useEffect(() => {
+        if (!queryKey) {
+            setData([]);
+            setError(undefined);
+            return;
+        }
+
+        try {
+            const fireOn = watchTables.map((table) => ({ table }));
+
+            // Initial fetch (sync so we can read rows immediately in the effect)
+            const result = sqliteDb.executeSync(rawSql, params as any[]);
+            setData((result.rows as T[]) ?? []);
+            setError(undefined);
+
+            // Subscribe to reactive updates
+            unsubscribeRef.current = sqliteDb.reactiveExecute({
+                query: rawSql,
+                arguments: params as any[],
+                fireOn,
+                callback: (response) => {
+                    setData((response.rows as T[]) ?? []);
+                },
+            });
+        } catch (e) {
+            console.error('[useFtsQuery] Setup error:', e);
+            setError(e instanceof Error ? e : new Error(String(e)));
+        }
+
+        return () => {
+            if (unsubscribeRef.current) {
+                unsubscribeRef.current();
+                unsubscribeRef.current = null;
+            }
+        };
+    // rawSql, params, and watchTables are all captured via queryKey — their
+    // values are stable for the lifetime of the subscription, so listing
+    // queryKey alone is sufficient and avoids re-subscribing on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [queryKey]); // rawSql, params, watchTables intentionally omitted — captured in queryKey
+
+    return { data, error };
+}
+
 type DrizzleQuery<T> = QueryPromise<T> &{
     toSQL: () => { sql: string; params: unknown[] };
 };

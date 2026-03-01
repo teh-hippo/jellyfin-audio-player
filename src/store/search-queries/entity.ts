@@ -10,11 +10,10 @@ const searchQueries = sqliteTable('search_queries', {
     sourceId: text('source_id').notNull().references(() => sources.id, { onDelete: 'cascade' }),
     id: text('id').primaryKey().$defaultFn(() => randomUUID()),
     query: text('query').notNull(),
-    timestamp: integer('timestamp').notNull(),
     localPlaybackOnly: integer('local_playback_only', { mode: 'boolean' }).notNull(),
     metadata: jsonColumn<unknown>('metadata'),
-    createdAt: integer('created_at').notNull(),
-    updatedAt: integer('updated_at').notNull(),
+    createdAt: integer('created_at').notNull().$defaultFn(() => Date.now()),
+    updatedAt: integer('updated_at').notNull().$defaultFn(() => Date.now()),
 }, (table) => [
     index('search_queries_source_timestamp_idx').on(table.sourceId, table.timestamp),
 ]);

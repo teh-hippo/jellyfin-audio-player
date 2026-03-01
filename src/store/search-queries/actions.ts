@@ -26,7 +26,7 @@ export async function deleteSearchQuery([sourceId, id]: EntityId): Promise<void>
     sqliteDb.flushPendingReactiveQueries();
 }
 
-export async function deleteSearchQueriesBySource(sourceId: string): Promise<void> {
-    await db.delete(searchQueries).where(eq(searchQueries.sourceId, sourceId));
+export async function clearSearchQueries(): Promise<void> {
+    await db.delete(searchQueries);
     sqliteDb.flushPendingReactiveQueries();
 }

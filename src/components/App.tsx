@@ -1,9 +1,6 @@
 import React, { PropsWithChildren, useEffect, useState } from 'react';
-import { Provider } from 'react-redux';
 import TrackPlayer, { Capability } from 'react-native-track-player';
-import { PersistGate } from 'redux-persist/integration/react';
 import Routes from '../screens';
-import store, { persistedStore } from '@/store';
 import {
     NavigationContainer,
     DefaultTheme,
@@ -53,7 +50,7 @@ export default function App(): React.JSX.Element | null {
 
     useEffect(() => {
         async function setupTrackPlayer() {
-            await TrackPlayer.setupPlayer({ 
+            await TrackPlayer.setupPlayer({
                 autoHandleInterruptions: true,
             });
             await TrackPlayer.updateOptions({
@@ -86,14 +83,10 @@ export default function App(): React.JSX.Element | null {
     }
 
     return (
-        <Provider store={store}>
-            <PersistGate loading={null} persistor={persistedStore}>
-                <ColorSchemeProvider>
-                    <ThemedNavigationContainer>
-                        <Routes />
-                    </ThemedNavigationContainer>
-                </ColorSchemeProvider>
-            </PersistGate>
-        </Provider>
+        <ColorSchemeProvider>
+            <ThemedNavigationContainer>
+                <Routes />
+            </ThemedNavigationContainer>
+        </ColorSchemeProvider>
     );
 }

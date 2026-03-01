@@ -1,25 +1,26 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import debounce from 'lodash/debounce';
 import Input from '@/components/Input';
-import { ActivityIndicator, Animated, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { Animated, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import styled from 'styled-components/native';
 
-import Fuse, { IFuseOptions } from 'fuse.js';
-import { Album, AlbumTrack, MusicArtist, Playlist } from '@/store/music/types';
-import { useAlbums, useTracks, useArtists, usePlaylists } from '@/store/music/hooks';
-import { useDownloads } from '@/store/downloads/hooks';
-import { useSourceId } from '@/store/db/useSourceId';
-import { searchAndStore } from '@/store/music/fetchers';
-import { addSearchQuery, clearSearchHistory, parseSearchQueries } from '@/store/search/db';
-import { useLiveQuery } from '@/store/live-queries';
-import { db } from '@/store';
-import searchQueries from '@/store/search-queries/entity';
-import { eq, desc } from 'drizzle-orm';
+import { useAlbumSearch } from '@/store/albums/hooks';
+import { useTrackSearch } from '@/store/tracks/hooks';
+import { useArtistSearch } from '@/store/artists/hooks';
+import { usePlaylistSearch } from '@/store/playlists/hooks';
+import { useSearchQueries } from '@/store/search-queries/hooks';
+import { clearSearchQueries, upsertSearchQuery } from '@/store/search-queries/actions';
+
+import type { Album } from '@/store/albums/types';
+import type { Track } from '@/store/tracks/types';
+import type { Artist } from '@/store/artists/types';
+import type { Playlist } from '@/store/playlists/types';
+import type { SearchQuery } from '@/store/search-queries/types';
 
 import { FlatList } from 'react-native-gesture-handler';
 import TouchableHandler from '@/components/TouchableHandler';
 import { useNavigation } from '@react-navigation/native';
-import { useGetImage } from '@/utility/JellyfinApi/lib';
+import Artwork from '@/store/sources/artwork-manager';
 import { t } from '@/localisation';
 import useDefaultStyles from '@/components/Colors';
 import { SubHeader, Text } from '@/components/Typography';
@@ -41,7 +42,7 @@ import TrashIcon from '@/assets/icons/trash.svg';
 import XMarkIcon from '@/assets/icons/xmark.svg';
 import SelectableFilter from './components/SelectableFilter';
 import Button from '@/components/Button';
-import { retrieveInstantMixByTrackId } from '@/utility/JellyfinApi/playlist';
+import { retrieveInstantMixByTrackId } from '@/utility/playlist';
 
 const KEYBOARD_OFFSET = Platform.select({
     ios: 0,
@@ -64,15 +65,6 @@ const Container = styled(View)`
 
 const FullSizeContainer = styled.View`
     flex: 1;
-`;
-
-const Loading = styled.View`
-    position: absolute;
-    right: 12px;
-    top: 0;
-    height: 100%;
-    flex: 1;
-    justify-content: center;
 `;
 
 const ClearButton = styled.TouchableOpacity`
@@ -121,277 +113,203 @@ const HistoryIconWrapper = styled.View`
     margin-right: 12px;
 `;
 
-const fuseOptions: IFuseOptions<Album | AlbumTrack | MusicArtist | Playlist> = {
-    keys: [
-        {
-            name: 'Name',
-            weight: 5
-        },
-        {
-            name: 'AlbumArtist',
-            weight: 0.7
-        },
-        {
-            name: 'AlbumArtists',
-            weight: 0.7
-        },
-        {
-            name: 'Artists',
-            weight: 0.7
-        }
-    ],
-    threshold: 0.1,
-    includeScore: true
-};
-
 type SearchType = 'Audio' | 'MusicAlbum' | 'MusicArtist' | 'Playlist';
 
-interface SearchResult {
-    type: SearchType;
-    id: string;
-    name: string;
-    album?: string;
-}
+type SearchResultItem =
+    | (Album   & { _type: 'MusicAlbum' })
+    | (Track   & { _type: 'Audio' })
+    | (Artist  & { _type: 'MusicArtist' })
+    | (Playlist & { _type: 'Playlist' });
 
-type SearchItem = Album | AlbumTrack | MusicArtist | Playlist;
+interface SearchQueryMeta {
+    filters: SearchType[];
+    localPlaybackOnly: boolean;
+}
 
 export default function Search() {
     const defaultStyles = useDefaultStyles();
     const offsets = useNavigationOffsets({ includeOverlay: false });
     const playTracks = usePlayTracks();
-    const sourceId = useSourceId();
 
-    // Prepare state for fuse and albums
+    // The committed search term — updated with a short debounce so FTS queries
+    // don't fire on every single keystroke.
+    const [inputValue, setInputValue] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
-    const [isLoading, setLoading] = useState(false);
-    const [fuseResults, setFuseResults] = useState<SearchResult[]>([]);
     const [activeFilters, setActiveFilters] = useState<Set<SearchType>>(new Set());
     const [localPlaybackOnly, setLocalPlaybackOnly] = useState(false);
 
-    const { albums: albumEntities } = useAlbums(sourceId);
-    const { tracks: trackEntities } = useTracks(sourceId);
-    const { artists: artistEntities } = useArtists(sourceId);
-    const { playlists: playlistEntities } = usePlaylists(sourceId);
-    const { entities: downloadEntities } = useDownloads(sourceId);
-    
-    // Use live query for search history
-    const { data: searchHistoryData } = useLiveQuery(
-        sourceId 
-            ? db.select().from(searchQueries).where(eq(searchQueries.sourceId, sourceId)).orderBy(desc(searchQueries.timestamp)).limit(10)
-            : null
-    );
-    
-    const searchHistory = useMemo(() => {
-        return searchHistoryData ? parseSearchQueries(searchHistoryData as any) : [];
-    }, [searchHistoryData]);
-
-    // Prepare helpers
-    const navigation = useNavigation<NavigationProp>();
-    const getImage = useGetImage();
-
-    /**
-     * This function retrieves search results from Jellyfin. It is a seperate
-     * callback, so that we can make sure it is properly debounced and doesn't
-     * cause execessive jank in the interface.
-     */
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    const fetchJellyfinResults = useCallback(debounce(async (searchTerm: string) => {
-        await searchAndStore(searchTerm);
-
-        // Loading is now complete
-        setLoading(false);
+    const commitSearchTerm = useCallback(debounce((term: string) => {
+        setSearchTerm(term);
     }, 150), []);
 
+    useEffect(() => {
+        commitSearchTerm(inputValue);
+    }, [inputValue, commitSearchTerm]);
+
+    // FTS hooks — each fires its own reactive SQLite query
+    const { data: albumResults }    = useAlbumSearch(searchTerm);
+    const { data: trackResults }    = useTrackSearch(searchTerm);
+    const { data: artistResults }   = useArtistSearch(searchTerm);
+    const { data: playlistResults } = usePlaylistSearch(searchTerm);
+
+    // Merge all four result sets into the unified typed list, applying active
+    // type filters if any are selected.
+    const results = useMemo<SearchResultItem[]>(() => {
+        const activeSet = activeFilters;
+        const include = (type: SearchType) => activeSet.size === 0 || activeSet.has(type);
+
+        return [
+            ...(include('MusicArtist')  ? (artistResults  ?? []).map(a => ({ ...a, _type: 'MusicArtist'  as const })) : []),
+            ...(include('MusicAlbum')   ? (albumResults   ?? []).map(a => ({ ...a, _type: 'MusicAlbum'   as const })) : []),
+            ...(include('Audio')        ? (trackResults   ?? []).map(track => ({ ...track, _type: 'Audio' as const })) : []),
+            ...(include('Playlist')     ? (playlistResults ?? []).map(p => ({ ...p, _type: 'Playlist'    as const })) : []),
+        ];
+    }, [albumResults, trackResults, artistResults, playlistResults, activeFilters]);
+
+    // Search history
+    const { data: searchHistoryRaw } = useSearchQueries(undefined, 10);
+
+    const searchHistory = useMemo((): Array<{ query: string; filters: SearchType[]; localPlaybackOnly: boolean }> => {
+        if (!searchHistoryRaw) return [];
+        return searchHistoryRaw.map((row: SearchQuery) => {
+            let meta: SearchQueryMeta = { filters: [], localPlaybackOnly: false };
+            try {
+                if (row.metadata) meta = row.metadata as SearchQueryMeta;
+            } catch {
+                // ignore malformed metadata
+            }
+            return {
+                query: row.query,
+                filters: meta.filters ?? [],
+                localPlaybackOnly: meta.localPlaybackOnly ?? row.localPlaybackOnly,
+            };
+        });
+    }, [searchHistoryRaw]);
+
+    const navigation = useNavigation<NavigationProp>();
+
     /**
-     * Debounced function to save search query to history after 10 seconds
-     * to avoid saving incomplete searches
+     * Persist the search query to history after the user has stopped typing
+     * for 10 seconds — avoids storing half-typed queries.
      */
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    const saveSearchToHistory = useCallback(debounce((query: string, filters: SearchType[], localOnly: boolean) => {
-        if (sourceId) {
-            addSearchQuery(sourceId, query, filters, localOnly);
-        }
-    }, 10_000), [sourceId]);
+    const saveSearchToHistory = useCallback(debounce(async (
+        query: string,
+        filters: SearchType[],
+        localOnly: boolean,
+    ) => {
+        if (!query.trim()) return;
+        const now = Date.now();
+        const meta: SearchQueryMeta = { filters, localPlaybackOnly: localOnly };
 
+        // sourceId is required by the schema. We pick it from the first
+        // available result across any type — they all belong to a valid source.
+        const firstResult = (artistResults ?? [])[0] ?? (albumResults ?? [])[0]
+            ?? (trackResults ?? [])[0] ?? (playlistResults ?? [])[0];
+        const sourceId: string | undefined = (firstResult as any)?.sourceId;
+        if (!sourceId) return;
 
-    const searchItems = useMemo(() => ({
-        ...albumEntities,
-        ...trackEntities,
-        ...artistEntities,
-        ...playlistEntities
-    }), [albumEntities, trackEntities, artistEntities, playlistEntities]);
+        await upsertSearchQuery({
+            sourceId,
+            query: query.trim(),
+            localPlaybackOnly: localOnly,
+            metadata: meta,
+            createdAt: now,
+            updatedAt: now,
+        });
+    }, 10_000), [artistResults, albumResults, trackResults, playlistResults]);
 
-    /**
-     * Since it is impractical to have a global fuse variable, we need to
-     * instantiate it for thsi function. With this effect, we generate a new
-     * Fuse instance every time the albums change. This can of course be done
-     * more intelligently by removing and adding the changed albums, but this is
-     * an open todo.
-     */
-    const fuse = useMemo(
-        () => new Fuse(Object.values(searchItems) as SearchItem[], fuseOptions),
-        [searchItems]
-    );
-
-    /**
-     * Whenever the search term changes, we gather results from Fuse and assign
-     * them to state
-     */
     useEffect(() => {
-        if (!searchTerm) {
-            return;
-        }
+        if (!searchTerm) return;
+        saveSearchToHistory(searchTerm, Array.from(activeFilters), localPlaybackOnly);
+    }, [searchTerm, activeFilters, localPlaybackOnly, saveSearchToHistory]);
 
-        const retrieveResults = async () => {
-            const searchTermTrimmed = searchTerm.trim();
-
-            // First set the immediate results from fuse
-            const fuseResults = fuse.search(searchTermTrimmed);
-            let results: SearchResult[] = fuseResults
-                .map(({ item }) => ({
-                    id: item.Id,
-                    type: item.Type as SearchType,
-                    album: (item as AlbumTrack)?.Album,
-                    name: item.Name,
-                }));
-
-            // Apply active filters (no filters active = all active)
-            if (activeFilters.size > 0) {
-                results = results.filter(result => activeFilters.has(result.type));
-            }
-
-            // Apply local playback filter
-            if (localPlaybackOnly) {
-                results = results.filter(result => {
-                    const item = searchItems[result.id];
-                    if (!item) return false;
-
-                    switch (result.type) {
-                        case 'Audio':
-                            // For tracks, check if downloaded
-                            return downloadEntities[result.id]?.isComplete === true;
-                        case 'MusicAlbum':
-                            // For albums, check if any tracks are downloaded
-                            return (item as Album).Tracks?.some(trackId =>
-                                downloadEntities[trackId]?.isComplete === true
-                            ) ?? false;
-                        case 'MusicArtist':
-                            // For artists, check if any of their tracks are downloaded
-                            return Object.values(trackEntities)
-                                .filter(track => track.ArtistItems?.some(artist => artist.Id === result.id))
-                                .some(track => downloadEntities[track.Id]?.isComplete === true);
-                        case 'Playlist':
-                            // For playlists, check if any tracks are downloaded
-                            return (item as Playlist).Tracks?.some(trackId =>
-                                downloadEntities[trackId]?.isComplete === true
-                            ) ?? false;
-                        default:
-                            return false;
-                    }
-                });
-            }
-
-            // Assign the preliminary results
-            setFuseResults(results);
-            setLoading(true);
-
-            // Save search query to history after 10 seconds (debounced)
-            saveSearchToHistory(searchTermTrimmed, Array.from(activeFilters), localPlaybackOnly);
-
-            try {
-                // Wrap the call in a try/catch block so that we catch any
-                // network issues in search and just use local search if the
-                // network is unavailable
-                fetchJellyfinResults(searchTermTrimmed);
-            } catch {
-                // Reset the loading indicator if the network fails
-                setLoading(false);
-            }
-        };
-
-        retrieveResults();
-    }, [searchTerm, setFuseResults, setLoading, fuse, fetchJellyfinResults, albumEntities, trackEntities, artistEntities, playlistEntities, activeFilters, localPlaybackOnly, downloadEntities, searchItems, saveSearchToHistory]);
-
-    // Handlers
     const toggleFilter = useCallback((filterType: SearchType) => {
         setActiveFilters(prev => {
-            const newFilters = new Set(prev);
-            if (newFilters.has(filterType)) {
-                newFilters.delete(filterType);
+            const next = new Set(prev);
+            if (next.has(filterType)) {
+                next.delete(filterType);
             } else {
-                newFilters.add(filterType);
+                next.add(filterType);
             }
-            return newFilters;
+            return next;
         });
     }, []);
 
-    const selectItem = useCallback(async ({ id, type }: { id: string; type: SearchType; }) => {
-        // Save search query immediately when user selects a result
-        if (sourceId) {
-            await addSearchQuery(sourceId, searchTerm.trim(), Array.from(activeFilters), localPlaybackOnly);
+    const selectItem = useCallback(async (item: SearchResultItem) => {
+        // Immediately persist when the user picks a result
+        const meta: SearchQueryMeta = { filters: Array.from(activeFilters), localPlaybackOnly };
+        const sourceId: string | undefined = (item as any).sourceId;
+        if (sourceId && inputValue.trim()) {
+            await upsertSearchQuery({
+                sourceId,
+                query: inputValue.trim(),
+                localPlaybackOnly,
+                metadata: meta,
+            });
         }
 
-        switch (type) {
+        switch (item._type) {
             case 'Audio': {
-                playTracks([id], { play: true });
-                const similarSongs = await retrieveInstantMixByTrackId(id);
-
-                // Remove the first from the list, because it is the same as the currently selected song.
+                playTracks([{ ...item, download: null }], { play: true });
+                const similarSongs = await retrieveInstantMixByTrackId([item.sourceId, item.id]);
                 similarSongs.shift();
-                playTracks(similarSongs.map(item => item.Id), { play: false, method: 'add-to-end' });
+                playTracks(
+                    similarSongs,
+                    { play: false, method: 'add-to-end' },
+                );
                 break;
             }
             case 'MusicAlbum':
-                navigation.navigate('Album', { id, album: searchItems?.[id] as Album });
+                navigation.navigate('Album', { id: [item.sourceId, item.id] });
                 break;
             case 'MusicArtist':
-                {
-                    const { Name: name } = searchItems[id];
-                    navigation.navigate('Artist', { id, name });
-                }
+                navigation.navigate('Artist', { id: [item.sourceId, item.id] });
                 break;
             case 'Playlist':
-                navigation.navigate('Playlist', { id });
+                navigation.navigate('Playlist', { id: [item.sourceId, item.id] });
                 break;
         }
-    }, [navigation, searchItems, playTracks, searchTerm, activeFilters, localPlaybackOnly, sourceId]);
+    }, [navigation, playTracks, inputValue, activeFilters, localPlaybackOnly]);
 
-    const applyHistoryItem = useCallback((query: string, filters: SearchType[], localOnly: boolean) => {
-        setSearchTerm(query);
+    const applyHistoryItem = useCallback((
+        query: string,
+        filters: SearchType[],
+        localOnly: boolean,
+    ) => {
+        setInputValue(query);
         setActiveFilters(new Set(filters));
         setLocalPlaybackOnly(localOnly);
     }, []);
 
     const handleClearSearch = useCallback(() => {
-        saveSearchToHistory(searchTerm.trim(), Array.from(activeFilters), localPlaybackOnly);
-        setSearchTerm('');
-    }, [searchTerm, activeFilters, localPlaybackOnly, saveSearchToHistory]);
+        saveSearchToHistory.flush();
+        setInputValue('');
+    }, [saveSearchToHistory]);
 
     const handleClearHistory = useCallback(async () => {
-        if (sourceId) {
-            await clearSearchHistory(sourceId);
-        }
-    }, [sourceId]);
+        await clearSearchQueries();
+    }, []);
 
     const SearchInput = React.useMemo(() => (
         <Animated.View style={{ paddingBottom: SEARCH_INPUT_OFFSET }}>
             <Container style={[defaultStyles.border]}>
                 <View>
                     <Input
-                        value={searchTerm}
-                        onChangeText={setSearchTerm}
+                        value={inputValue}
+                        onChangeText={setInputValue}
                         style={[defaultStyles.view, { marginBottom: 12 }]}
                         placeholder={t('search') + '...'}
                         icon={<SearchIcon width={14} height={14} fill={defaultStyles.textHalfOpacity.color} />}
                         testID="search-input"
                         autoCorrect={false}
                     />
-                    {searchTerm.length > 0 && !isLoading ? (
+                    {inputValue.length > 0 ? (
                         <ClearButton onPress={handleClearSearch} style={{ marginTop: -4 }}>
                             <XMarkIcon width={16} height={16} fill={defaultStyles.textHalfOpacity.color} />
                         </ClearButton>
                     ) : null}
-                    {isLoading ? <Loading style={{ marginTop: -4 }}><ActivityIndicator /></Loading> : null}
                 </View>
             </Container>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -429,96 +347,91 @@ export default function Search() {
                 </View>
             </ScrollView>
         </Animated.View>
-    ), [searchTerm, setSearchTerm, defaultStyles, isLoading, activeFilters, toggleFilter, localPlaybackOnly, handleClearSearch]);
+    ), [inputValue, defaultStyles, activeFilters, toggleFilter, localPlaybackOnly, handleClearSearch]);
 
     const insets = useSafeAreaInsets();
+
+    const hasResults = results.length > 0;
+    const isSearching = inputValue.length > 0;
 
     return (
         <View style={{ flex: 1, paddingTop: insets.top, marginBottom: offsets.bottom }}>
             <KeyboardAvoidingView behavior="height" style={{ flex: 1 }} keyboardVerticalOffset={KEYBOARD_OFFSET}>
-                {searchTerm ? (
-                    <FlatList
-                        keyboardShouldPersistTaps="handled"
-                        style={{ flex: 2, }}
-                        contentContainerStyle={{ paddingTop: offsets.top, paddingBottom: SEARCH_INPUT_HEIGHT }}
-                        scrollIndicatorInsets={{ top: offsets.top / 2, bottom: offsets.bottom / 2 + 10 + SEARCH_INPUT_HEIGHT }}
-                        data={fuseResults}
-                        renderItem={({ item: { id, type, name } }: { item: SearchResult }) => {
-                            const searchItem = searchItems?.[id];
-
-                            // GUARD: If the album cannot be found in the store, we
-                            // cannot display it.
-                            if (!searchItem) {
-                                return null;
-                            }
-
-                            return (
-                                <TouchableHandler<{ id: string; type: SearchType; }> id={{ id, type }} onPress={selectItem} testID={`search-result-${id}`}>
-                                    <SearchResult>
-                                        <ShadowWrapper>
-                                            <SearchItemImage source={{ uri: getImage(searchItem) }} style={defaultStyles.imageBackground} />
-                                        </ShadowWrapper>
-                                        <View style={{ flex: 1 }}>
-                                            <Text numberOfLines={1}>
-                                                {name}
-                                            </Text>
-                                            <HalfOpacity style={defaultStyles.text} numberOfLines={1}>
-                                                {type === 'MusicAlbum' ?
-                                                    <>
-                                                        <AlbumIcon width={12} height={12} fill={defaultStyles.textHalfOpacity.color} />
-                                                        {' '}
-                                                        {t('album')}
-                                                        {' • '}
-                                                        {(searchItem as Album)?.AlbumArtist}
-                                                    </>
-                                                    : null
-                                                }
-                                                {type === 'Audio' ?
-                                                    <>
-                                                        <TrackIcon width={12} height={12} fill={defaultStyles.textHalfOpacity.color} />
-                                                        {' '}
-                                                        {t('track')}
-                                                        {' • '}
-                                                        {(searchItem as AlbumTrack)?.AlbumArtist}
-                                                        {' — '}
-                                                        {searchItem?.Name}
-                                                    </>
-                                                    : null
-                                                }
-                                                {type === 'MusicArtist' ?
-                                                    <>
-                                                        <MicrophoneIcon width={12} height={12} fill={defaultStyles.textHalfOpacity.color} />
-                                                        {' '}
-                                                        {t('artist')}
-                                                    </>
-                                                    : null
-                                                }
-                                                {type === 'Playlist' ?
-                                                    <>
-                                                        <PlaylistIcon width={12} height={12} fill={defaultStyles.textHalfOpacity.color} />
-                                                        {' '}
-                                                        {t('playlist')}
-                                                    </>
-                                                    : null
-                                                }
-                                            </HalfOpacity>
-                                        </View>
-                                        {type === 'Audio' ?
-                                            <View style={{ marginLeft: 16 }}>
-                                                <DownloadIcon trackId={id} />
+                {isSearching ? (
+                    <>
+                        {hasResults ? (
+                            <FlatList
+                                keyboardShouldPersistTaps="handled"
+                                style={{ flex: 2 }}
+                                contentContainerStyle={{ paddingTop: offsets.top, paddingBottom: SEARCH_INPUT_HEIGHT }}
+                                scrollIndicatorInsets={{ top: offsets.top / 2, bottom: offsets.bottom / 2 + 10 + SEARCH_INPUT_HEIGHT }}
+                                data={results}
+                                renderItem={({ item }: { item: SearchResultItem }) => (
+                                    <TouchableHandler<SearchResultItem>
+                                        id={item}
+                                        onPress={selectItem}
+                                        testID={`search-result-${item.id}`}
+                                    >
+                                        <SearchResult>
+                                            <ShadowWrapper>
+                                                <SearchItemImage
+                                                    source={{ uri: Artwork.getUrlSync(item) }}
+                                                    style={defaultStyles.imageBackground}
+                                                />
+                                            </ShadowWrapper>
+                                            <View style={{ flex: 1 }}>
+                                                <Text numberOfLines={1}>{item.name}</Text>
+                                                <HalfOpacity style={defaultStyles.text} numberOfLines={1}>
+                                                    {item._type === 'MusicAlbum' ? (
+                                                        <>
+                                                            <AlbumIcon width={12} height={12} fill={defaultStyles.textHalfOpacity.color} />
+                                                            {' '}{t('album')}{' • '}
+                                                            {item.albumArtist}
+                                                        </>
+                                                    ) : null}
+                                                    {item._type === 'Audio' ? (
+                                                        <>
+                                                            <TrackIcon width={12} height={12} fill={defaultStyles.textHalfOpacity.color} />
+                                                            {' '}{t('track')}{' • '}
+                                                            {item.albumArtist}
+                                                            {' — '}
+                                                            {item.album}
+                                                        </>
+                                                    ) : null}
+                                                    {item._type === 'MusicArtist' ? (
+                                                        <>
+                                                            <MicrophoneIcon width={12} height={12} fill={defaultStyles.textHalfOpacity.color} />
+                                                            {' '}{t('artist')}
+                                                        </>
+                                                    ) : null}
+                                                    {item._type === 'Playlist' ? (
+                                                        <>
+                                                            <PlaylistIcon width={12} height={12} fill={defaultStyles.textHalfOpacity.color} />
+                                                            {' '}{t('playlist')}
+                                                        </>
+                                                    ) : null}
+                                                </HalfOpacity>
                                             </View>
-                                            : null
-                                        }
-                                        <View style={{ marginLeft: 16 }}>
-                                            <ChevronRight width={14} height={14} fill={defaultStyles.textQuarterOpacity.color} />
-                                        </View>
-                                    </SearchResult>
-                                </TouchableHandler>
-                            );
-                        }}
-                        keyExtractor={(item) => item.id}
-                        extraData={[searchTerm, searchItems, activeFilters]}
-                    />
+                                            {item._type === 'Audio' ? (
+                                                <View style={{ marginLeft: 16 }}>
+                                                    <DownloadIcon trackId={item.id} />
+                                                </View>
+                                            ) : null}
+                                            <View style={{ marginLeft: 16 }}>
+                                                <ChevronRight width={14} height={14} fill={defaultStyles.textQuarterOpacity.color} />
+                                            </View>
+                                        </SearchResult>
+                                    </TouchableHandler>
+                                )}
+                                keyExtractor={item => `${item._type}-${item.id}`}
+                                extraData={activeFilters}
+                            />
+                        ) : (
+                            <FullSizeContainer style={{ paddingTop: offsets.top + SEARCH_INPUT_HEIGHT }}>
+                                <Text style={{ textAlign: 'center', opacity: 0.5, fontSize: 18 }}>{t('no-results')}</Text>
+                            </FullSizeContainer>
+                        )}
+                    </>
                 ) : searchHistory.length > 0 ? (
                     <ScrollView
                         style={{ flex: 1 }}
@@ -547,15 +460,17 @@ export default function Search() {
                                         </Text>
                                         {(item.filters.length > 0 || item.localPlaybackOnly) ? (
                                             <HalfOpacity style={defaultStyles.text} numberOfLines={1}>
-                                                {item.filters.length > 0 ? item.filters.map(f => {
-                                                    switch (f) {
-                                                        case 'MusicArtist': return 'Artists';
-                                                        case 'MusicAlbum': return 'Albums';
-                                                        case 'Audio': return 'Tracks';
-                                                        case 'Playlist': return 'Playlist';
-                                                    }
-                                                }).join(', ') : null}
-                                                {item.filters.length > 0 ? item.localPlaybackOnly ? ' • ' : null : null}
+                                                {item.filters.length > 0
+                                                    ? item.filters.map(f => {
+                                                        switch (f) {
+                                                            case 'MusicArtist': return 'Artists';
+                                                            case 'MusicAlbum': return 'Albums';
+                                                            case 'Audio': return 'Tracks';
+                                                            case 'Playlist': return 'Playlist';
+                                                        }
+                                                    }).join(', ')
+                                                    : null}
+                                                {item.filters.length > 0 && item.localPlaybackOnly ? ' • ' : null}
                                                 {item.localPlaybackOnly ? 'Local Playback' : null}
                                             </HalfOpacity>
                                         ) : null}
@@ -570,11 +485,6 @@ export default function Search() {
                 ) : (
                     <View style={{ flex: 1 }} />
                 )}
-                {(searchTerm.length && !fuseResults.length && !isLoading) ? (
-                    <FullSizeContainer>
-                        <Text style={{ textAlign: 'center', opacity: 0.5, fontSize: 18 }}>{t('no-results')}</Text>
-                    </FullSizeContainer>
-                ) : null}
                 {SearchInput}
             </KeyboardAvoidingView>
         </View>

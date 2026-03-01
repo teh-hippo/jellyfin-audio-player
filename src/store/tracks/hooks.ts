@@ -1,6 +1,7 @@
-import { useLiveQuery } from '@/store/live-queries';
+import { useLiveQuery, useFtsQuery } from '@/store/live-queries';
 import { db } from '@/store';
 import type { EntityId } from '@/store/types';
+import type { Track } from './types';
 
 /** A track row with its local download entry attached (null when none exists). */
 export type TrackWithDownload = NonNullable<
@@ -46,6 +47,28 @@ export function useTracksByAlbum([sourceId, albumId]: EntityId) {
                 indexNumber: 'asc',
             },
         })
+    );
+}
+
+/**
+ * Full-text search across tracks using the tracks_fts virtual table.
+ * Searches name, album, and album_artist columns. Returns at most 50 results.
+ * Pass an empty string (or omit) to get no results.
+ */
+export function useTrackSearch(term: string) {
+    const trimmed = term.trim();
+    const matchTerm = trimmed ? trimmed + '*' : '';
+
+    return useFtsQuery<Track>(
+        `SELECT tracks.*
+         FROM tracks_fts
+         JOIN tracks ON tracks.rowid = tracks_fts.rowid
+         WHERE tracks_fts MATCH ?
+         ORDER BY rank
+         LIMIT 50`,
+        [matchTerm],
+        ['tracks'],
+        trimmed.length > 0,
     );
 }
 

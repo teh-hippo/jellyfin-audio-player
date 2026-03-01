@@ -1,7 +1,8 @@
 import { sql } from 'drizzle-orm';
-import { useLiveQuery } from '@/store/live-queries';
+import { useLiveQuery, useFtsQuery } from '@/store/live-queries';
 import { db } from '@/store';
 import { useMemo } from 'react';
+import type { Album } from './types';
 
 import type { EntityId } from '@/store/types';
 import { groupByAlphabet } from '@/utility/groupByAlphabet';
@@ -68,6 +69,29 @@ export function useAlbumsByArtist([sourceId, artistId]: EntityId) {
  * Returns albums that are marked as similar to the given album via the
  * through relation. Pass [album.sourceId, album.id].
  */
+/**
+ * Full-text search across albums using the albums_fts virtual table.
+ * Searches name and album_artist columns. Returns at most 50 results.
+ * Pass an empty string (or omit) to get no results.
+ */
+export function useAlbumSearch(term: string) {
+    const trimmed = term.trim();
+    // Append * for prefix matching so e.g. "dark" matches "Darkness"
+    const matchTerm = trimmed ? trimmed + '*' : '';
+
+    return useFtsQuery<Album>(
+        `SELECT albums.*
+         FROM albums_fts
+         JOIN albums ON albums.rowid = albums_fts.rowid
+         WHERE albums_fts MATCH ?
+         ORDER BY rank
+         LIMIT 50`,
+        [matchTerm],
+        ['albums'],
+        trimmed.length > 0,
+    );
+}
+
 export function useAlbumSimilar([sourceId, albumId]: EntityId) {
     return useLiveQuery(
         db.query.albums.findFirst({

@@ -1,8 +1,9 @@
 import { sql } from 'drizzle-orm';
-import { useLiveQuery } from '@/store/live-queries';
+import { useLiveQuery, useFtsQuery } from '@/store/live-queries';
 import { db } from '@/store';
 import { useMemo } from 'react';
 import { groupByAlphabet } from '@/utility/groupByAlphabet';
+import type { Artist } from './types';
 
 export function useArtists(sourceId?: string) {
     return useLiveQuery(
@@ -27,6 +28,28 @@ export function useArtist([sourceId, id]: [sourceId: string, id: string]) {
  * name, or '#' for non-alphabetic names. The '#' section is always placed
  * at the end.
  */
+/**
+ * Full-text search across artists using the artists_fts virtual table.
+ * Searches the name column. Returns at most 50 results.
+ * Pass an empty string to get no results.
+ */
+export function useArtistSearch(term: string) {
+    const trimmed = term.trim();
+    const matchTerm = trimmed ? trimmed + '*' : '';
+
+    return useFtsQuery<Artist>(
+        `SELECT artists.*
+         FROM artists_fts
+         JOIN artists ON artists.rowid = artists_fts.rowid
+         WHERE artists_fts MATCH ?
+         ORDER BY rank
+         LIMIT 50`,
+        [matchTerm],
+        ['artists'],
+        trimmed.length > 0,
+    );
+}
+
 export function useArtistsByAlphabet(sourceId?: string) {
     const { data } = useLiveQuery(
         db.query.artists.findMany({
