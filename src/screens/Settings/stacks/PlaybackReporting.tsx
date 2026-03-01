@@ -6,7 +6,7 @@ import { useLiveQuery } from '@/store/live-queries';
 import { db } from '@/store';
 import appSettings from '@/store/settings/entity';
 import { eq } from 'drizzle-orm';
-import { setEnablePlaybackReporting } from '@/store/settings/actions';
+import { updateAppSettings } from '@/store/settings/actions';
 import Container from '../components/Container';
 import { SwitchContainer, SwitchLabel } from '../components/Switch';
 
@@ -17,7 +17,7 @@ export default function PlaybackReporting() {
     const isEnabled = settings?.[0]?.enablePlaybackReporting ?? true;
 
     const toggleSwitch = useCallback(() => {
-        setEnablePlaybackReporting(!isEnabled);
+        updateAppSettings({ enablePlaybackReporting: !isEnabled });
     }, [isEnabled]);
 
     return (

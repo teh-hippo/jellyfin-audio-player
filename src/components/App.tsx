@@ -10,7 +10,7 @@ import {
     DarkTheme as BaseDarkTheme,
 } from '@react-navigation/native';
 import { ColorSchemeProvider, themes, useUserOrSystemScheme } from './Colors';
-import DownloadManager from './DownloadManager';
+
 import AppLoading from './AppLoading';
 import { captureException } from '@sentry/react-native';
 
@@ -91,7 +91,6 @@ export default function App(): React.JSX.Element | null {
                 <ColorSchemeProvider>
                     <ThemedNavigationContainer>
                         <Routes />
-                        <DownloadManager />
                     </ThemedNavigationContainer>
                 </ColorSchemeProvider>
             </PersistGate>

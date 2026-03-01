@@ -1,4 +1,5 @@
 import { ListTemplate, HybridAutoPlay, type ImageButton } from '@iternio/react-native-auto-play';
+import type { TrackWithDownload } from '@/store/tracks/hooks';
 import { t } from '@/localisation';
 import { playTracks } from '@/utility/usePlayTracks';
 import { db } from '@/store';
@@ -57,16 +58,15 @@ export async function createPlaylistsTemplate(): Promise<ListTemplate> {
 /**
  * Creates a detail template for a specific playlist showing its tracks
  * with play and shuffle actions. Reads tracks from the local DB only —
- * the caller is expected to have synced them via SyncManager beforehand.
+ * the caller is expected to have synced them via Sync beforehand.
  */
 async function createPlaylistDetailTemplate(playlist: Playlist): Promise<ListTemplate> {
     const result = await db.query.playlists.findFirst({
         where: { id: playlist.id },
-        with: { tracks: true },
+        with: { tracks: { with: { download: true } } },
     });
 
-    const tracks = result?.tracks ?? [];
-    const trackIds = tracks.map(track => track.id);
+    const tracks: TrackWithDownload[] = result?.tracks ?? [];
 
     console.log('[PlaylistsList] Playlist tracks:', tracks.length);
 
@@ -98,7 +98,7 @@ async function createPlaylistDetailTemplate(playlist: Playlist): Promise<ListTem
         detailedText: { text: track.albumArtist ?? t('unknown-artist') },
         onPress: async () => {
             try {
-                await playTracks(trackIds, { playIndex: index });
+                await playTracks(tracks, { playIndex: index });
             } catch (error) {
                 console.error('[PlaylistsList] Error playing track:', error);
             }
@@ -111,7 +111,7 @@ async function createPlaylistDetailTemplate(playlist: Playlist): Promise<ListTem
         onPress: async () => {
             console.log('[PlaylistsList] Play playlist:', playlist.name);
             try {
-                await playTracks(trackIds);
+                await playTracks(tracks);
             } catch (error) {
                 console.error('[PlaylistsList] Error playing playlist:', error);
             }
@@ -124,7 +124,7 @@ async function createPlaylistDetailTemplate(playlist: Playlist): Promise<ListTem
         onPress: async () => {
             console.log('[PlaylistsList] Shuffle playlist:', playlist.name);
             try {
-                await playTracks(trackIds, { shuffle: true });
+                await playTracks(tracks, { shuffle: true });
             } catch (error) {
                 console.error('[PlaylistsList] Error shuffling playlist:', error);
             }

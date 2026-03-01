@@ -1,34 +1,36 @@
-import React, { useCallback, useEffect, useRef } from 'react';
-import { useGetImage } from '@/utility/JellyfinApi/lib';
+import React, { useCallback, useRef } from 'react';
+import Artwork from '@/store/sources/artwork-manager';
 import { Text, View, FlatList, ListRenderItem, RefreshControl } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { differenceInDays } from 'date-fns';
-import { usePlaylists } from '@/store/music/hooks';
-import * as musicFetchers from '@/store/music/fetchers';
-import { useSourceId } from '@/store/db/useSourceId';
-import { PLAYLIST_CACHE_AMOUNT_OF_DAYS } from '@/CONSTANTS';
+import { usePlaylists } from '@/store/playlists/hooks';
+import Sync from '@/store/sources/sync-manager';
+import useSyncAction from '@/utility/useSyncAction';
 import TouchableHandler from '@/components/TouchableHandler';
 import AlbumImage, { AlbumItem } from './components/AlbumImage';
 import useDefaultStyles from '@/components/Colors';
 import { NavigationProp } from '@/screens/types';
 import { SafeFlatList, useNavigationOffsets } from '@/components/SafeNavigatorView';
+import type { Playlist } from '@/store/playlists/types';
 
-interface GeneratedAlbumItemProps {
-    id: string | number;
+interface GeneratedPlaylistItemProps {
+    playlist: Playlist;
     imageUrl?: string | null;
-    name: string;
-    onPress: (id: string) => void;
+    onPress: (playlist: Playlist) => void;
 }
 
-const GeneratedPlaylistItem = React.memo(function GeneratedPlaylistItem(props: GeneratedAlbumItemProps) {
+const GeneratedPlaylistItem = React.memo(function GeneratedPlaylistItem(props: GeneratedPlaylistItemProps) {
     const defaultStyles = useDefaultStyles();
-    const { id, imageUrl, name, onPress } = props;
+    const { playlist, imageUrl, onPress } = props;
+
+    const handlePress = useCallback(() => {
+        onPress(playlist);
+    }, [playlist, onPress]);
 
     return (
-        <TouchableHandler id={id as string} onPress={onPress}>
+        <TouchableHandler id={playlist.id} onPress={handlePress}>
             <AlbumItem>
                 <AlbumImage source={{ uri: imageUrl || undefined }} style={defaultStyles.imageBackground} />
-                <Text numberOfLines={1} style={defaultStyles.text}>{name}</Text>
+                <Text numberOfLines={1} style={defaultStyles.text}>{playlist.name}</Text>
             </AlbumItem>
         </TouchableHandler>
     );
@@ -38,74 +40,68 @@ const Playlists: React.FC = () => {
     const offsets = useNavigationOffsets();
 
     // Retrieve data from store
-    const sourceId = useSourceId();
-    const { playlists, ids, isLoading, lastRefreshed } = usePlaylists();
-    
+    const { data: playlists } = usePlaylists();
+
     // Initialise helpers
     const navigation = useNavigation<NavigationProp>();
-    const getImage = useGetImage();
-    const listRef = useRef<FlatList<string>>(null);
 
-    const getItemLayout = useCallback((data: ArrayLike<string> | null | undefined, index: number): { offset: number, length: number, index: number } => {
+    const listRef = useRef<FlatList<Playlist>>(null);
+
+    const getItemLayout = useCallback((
+        _data: ArrayLike<Playlist> | null | undefined,
+        index: number,
+    ): { offset: number; length: number; index: number } => {
         const length = 220;
         const offset = length * index;
         return { index, length, offset };
     }, []);
 
     // Set callbacks
-    const retrieveData = useCallback(async () => await musicFetchers.fetchAndStoreAllPlaylists(), []);
-    const selectAlbum = useCallback((id: string) => {
-        navigation.navigate('Playlist', { id });
+    const [isLoading, retrieveData] = useSyncAction(() => Sync.syncPlaylists());
+
+    const selectPlaylist = useCallback((playlist: Playlist) => {
+        navigation.navigate('Playlist', { id: [playlist.sourceId, playlist.id] });
     }, [navigation]);
-    const generateItem: ListRenderItem<string> = useCallback(({ item, index }) => {
+
+    const generateItem: ListRenderItem<Playlist> = useCallback(({ item, index }) => {
+        // Render an empty spacer for odd-index items (already rendered as the
+        // second item in the previous even-index row).
         if (index % 2 === 1) {
-            return <View key={item} />;
+            return <View key={item.id} />;
         }
 
-        const nextItemId = ids[index + 1];
-        const nextItem = playlists[nextItemId];
+        const nextItem = (playlists ?? [])[index + 1];
 
         return (
-            <View style={{ flexDirection: 'row', marginLeft: 10, marginRight: 10 }} key={item}>
+            <View style={{ flexDirection: 'row', marginLeft: 10, marginRight: 10 }} key={item.id}>
                 <GeneratedPlaylistItem
-                    id={item}
-                    imageUrl={getImage(playlists[item])}
-                    name={playlists[item]?.Name || ''}
-                    onPress={selectAlbum}
+                    playlist={item}
+                    imageUrl={Artwork.getUrlSync(item)}
+                    onPress={selectPlaylist}
                 />
-                {nextItem && 
+                {nextItem && (
                     <GeneratedPlaylistItem
-                        id={nextItemId}
-                        imageUrl={getImage(nextItem)}
-                        name={nextItem.Name || ''}
-                        onPress={selectAlbum}
+                        playlist={nextItem}
+                        imageUrl={Artwork.getUrlSync(nextItem)}
+                        onPress={selectPlaylist}
                     />
-                }
+                )}
             </View>
         );
-    }, [playlists, getImage, selectAlbum, ids]);
+    }, [playlists, selectPlaylist]);
 
-    // Retrieve data on mount
-    useEffect(() => { 
-        // GUARD: Only refresh this API call every set amounts of days
-        if (!lastRefreshed || differenceInDays(lastRefreshed, new Date()) > PLAYLIST_CACHE_AMOUNT_OF_DAYS) {
-            retrieveData(); 
-        }
-    });
-    
     return (
         <SafeFlatList
             refreshControl={
                 <RefreshControl refreshing={isLoading} onRefresh={retrieveData} progressViewOffset={offsets.top} />
             }
-            data={ids} 
+            data={playlists ?? []}
             getItemLayout={getItemLayout}
             ref={listRef}
-            keyExtractor={(item, index) => `${item}_${index}`}
+            keyExtractor={(item, index) => `${item.id}_${index}`}
             renderItem={generateItem}
         />
     );
 };
-
 
 export default Playlists;

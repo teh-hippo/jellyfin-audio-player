@@ -7,10 +7,62 @@
 * such as processing media buttons or analytics
 */
 
-import TrackPlayer, { Event, State } from 'react-native-track-player';
+import TrackPlayer, { Event, State, type Track } from 'react-native-track-player';
 import store from '@/store';
 import { setTimerDate } from '@/store/sleep-timer';
-import { sendPlaybackEvent } from './JellyfinApi/playback';
+import { driverRegistry } from '@/store/sources/drivers/registry';
+import type { EntityId } from '@/store/types';
+
+/**
+ * Report a playback event to the appropriate source driver.
+ *
+ * @param event       Which playback event to report.
+ * @param track       The track to report for. Falls back to the currently
+ *                    active TrackPlayer track when omitted.
+ * @param positionS   Playback position in seconds. Falls back to the current
+ *                    TrackPlayer position when omitted.
+ */
+async function sendPlaybackEvent(
+    event: 'start' | 'progress' | 'stop',
+    track?: Track,
+    positionS?: number,
+): Promise<void> {
+    try {
+        const resolvedTrack = track ?? await TrackPlayer.getActiveTrack();
+        if (!resolvedTrack) {
+            return;
+        }
+
+        const entityId = resolvedTrack.entityId as EntityId | undefined;
+        if (!entityId) {
+            return;
+        }
+
+        const [sourceId, trackId] = entityId;
+        const driver = await driverRegistry.getById(sourceId);
+        if (!driver) {
+            return;
+        }
+
+        const resolvedPositionS = positionS ?? await TrackPlayer.getPosition();
+        const positionTicks = Math.round(resolvedPositionS * 10_000_000);
+
+        switch (event) {
+            case 'start':
+                await driver.reportPlaybackStart(trackId, positionTicks);
+                break;
+            case 'progress':
+                await driver.reportPlaybackProgress(trackId, positionTicks);
+                break;
+            case 'stop':
+                await driver.reportPlaybackStop(trackId, positionTicks);
+                break;
+        }
+    } catch (err) {
+        // Playback reporting is best-effort — never crash the service.
+        console.warn('[PlaybackService] Failed to report playback event:', event, err);
+    }
+}
 
 export default async function() {
     TrackPlayer.addEventListener(Event.RemotePlay, () => {
@@ -41,14 +93,14 @@ export default async function() {
         // Retrieve the current settings from the Redux store
         const settings = store.getState().settings;
 
-        // GUARD: Only report playback when the settings is enabled
+        // GUARD: Only report playback when the setting is enabled
         if (settings.enablePlaybackReporting && 'track' in e) {
-            // GUARD: End the previous track if it's about to end
+            // End the previous track session before starting the new one
             if (e.lastTrack) {
-                sendPlaybackEvent('/Sessions/Playing/Stopped', e.lastTrack, e.lastPosition);
+                sendPlaybackEvent('stop', e.lastTrack, e.lastPosition ?? undefined);
             }
 
-            sendPlaybackEvent('/Sessions/Playing', e.track);
+            sendPlaybackEvent('start', e.track);
         }
     });
 
@@ -56,9 +108,9 @@ export default async function() {
         // Retrieve the current settings from the Redux store
         const { settings, sleepTimer } = store.getState();
 
-        // GUARD: Only report playback when the settings is enabled
+        // GUARD: Only report playback when the setting is enabled
         if (settings.enablePlaybackReporting) {
-            sendPlaybackEvent('/Sessions/Playing/Progress');
+            sendPlaybackEvent('progress');
         }
 
         // check if timerDate is undefined, otherwise start timer
@@ -72,13 +124,12 @@ export default async function() {
         // Retrieve the current settings from the Redux store
         const settings = store.getState().settings;
 
-        // GUARD: Only report playback when the settings is enabled
+        // GUARD: Only report playback when the setting is enabled
         if (settings.enablePlaybackReporting) {
-            // GUARD: Only respond to stopped events
             if (event.state === State.Stopped) {
-                sendPlaybackEvent('/Sessions/Playing/Stopped');
+                sendPlaybackEvent('stop');
             } else if (event.state === State.Paused) {
-                sendPlaybackEvent('/Sessions/Playing/Progress');
+                sendPlaybackEvent('progress');
             }
         }
     });

@@ -1,3 +1,4 @@
+import type { TrackWithDownload } from '@/store/tracks/hooks';
 import { sql } from 'drizzle-orm';
 import { ListTemplate, HybridAutoPlay, type ImageButton } from '@iternio/react-native-auto-play';
 import { t } from '@/localisation';
@@ -116,7 +117,7 @@ export async function createAllAlbumsTemplate(): Promise<ListTemplate> {
 /**
  * Creates a detail template for a specific album showing its tracks
  * with play and shuffle actions. Fetches tracks from the local DB only —
- * the caller is expected to have synced them via SyncManager beforehand.
+ * the caller is expected to have synced them via Sync beforehand.
  */
 export async function createAlbumDetailTemplate(album: Album): Promise<ListTemplate> {
     const result = await db.query.albums.findFirst({
@@ -127,15 +128,14 @@ export async function createAlbumDetailTemplate(album: Album): Promise<ListTempl
                     parentIndexNumber: 'asc',
                     indexNumber: 'asc',
                 },
+                with: { download: true },
             },
         },
     });
 
-    const tracks = result?.tracks ?? [];
+    const tracks: TrackWithDownload[] = result?.tracks ?? [];
 
     console.log('[AlbumsList] Album tracks:', tracks.length);
-
-    const trackIds = tracks.map(track => track.id);
 
     const items = tracks.map((track, index) => ({
         type: 'default' as const,
@@ -143,7 +143,7 @@ export async function createAlbumDetailTemplate(album: Album): Promise<ListTempl
         detailedText: { text: track.albumArtist ?? t('unknown-artist') },
         onPress: async () => {
             try {
-                await playTracks(trackIds, { playIndex: index });
+                await playTracks(tracks, { playIndex: index });
             } catch (error) {
                 console.error('[AlbumsList] Error playing track:', error);
             }
@@ -156,7 +156,7 @@ export async function createAlbumDetailTemplate(album: Album): Promise<ListTempl
         onPress: async () => {
             console.log('[AlbumsList] Play album:', album.name);
             try {
-                await playTracks(trackIds);
+                await playTracks(tracks);
             } catch (error) {
                 console.error('[AlbumsList] Error playing album:', error);
             }
@@ -169,7 +169,7 @@ export async function createAlbumDetailTemplate(album: Album): Promise<ListTempl
         onPress: async () => {
             console.log('[AlbumsList] Shuffle album:', album.name);
             try {
-                await playTracks(trackIds, { shuffle: true });
+                await playTracks(tracks, { shuffle: true });
             } catch (error) {
                 console.error('[AlbumsList] Error shuffling album:', error);
             }

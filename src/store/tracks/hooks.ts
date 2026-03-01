@@ -13,10 +13,19 @@ export function useTracks() {
     );
 }
 
-export function useTrack(id: string) {
+export function useTrack([sourceId, id]: EntityId) {
     return useLiveQuery(
         db.query.tracks.findFirst({
-            where: { id },
+            where: { sourceId, id },
+        })
+    );
+}
+
+export function useTrackWithDownload([sourceId, id]: EntityId) {
+    return useLiveQuery(
+        db.query.tracks.findFirst({
+            where: { sourceId, id },
+            with: { download: true },
         })
     );
 }

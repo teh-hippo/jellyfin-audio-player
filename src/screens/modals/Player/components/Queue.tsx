@@ -175,7 +175,7 @@ export default function Queue({ header }: Props) {
                             </TextHalfOpacity>
                         </View>
                         <View>
-                            <DownloadIcon trackId={track.backendId} fill={currentIndex === index ? defaultStyles.themeColor.color + '80' : undefined} />
+                            <DownloadIcon trackId={track.entityId?.[1]} fill={currentIndex === index ? defaultStyles.themeColor.color + '80' : undefined} />
                         </View>
                     </QueueItem>
                 </TouchableHandler>

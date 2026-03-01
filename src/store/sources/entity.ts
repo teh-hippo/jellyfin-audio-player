@@ -1,10 +1,11 @@
+import { randomUUID } from '../../utility/randomUUID';
 import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
 
 /**
  * Sources table - stores Jellyfin/Emby server connections
  */
 const sources = sqliteTable('sources', {
-    id: text('id').primaryKey(),
+    id: text('id').primaryKey().$default(() => randomUUID()),
     uri: text('uri').notNull(),
     userId: text('user_id'),
     accessToken: text('access_token'),

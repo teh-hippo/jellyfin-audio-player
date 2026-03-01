@@ -1,14 +1,11 @@
-import React, { useCallback, useEffect, useRef, useMemo } from 'react';
-import { useGetImage } from '@/utility/JellyfinApi/lib';
+import React, { useCallback, useRef, useMemo } from 'react';
+import Artwork from '@/store/sources/artwork-manager';
 import { View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { differenceInDays } from 'date-fns';
-import { useArtists, useArtistsByAlphabet } from '@/store/music/hooks';
-import * as musicFetchers from '@/store/music/fetchers';
-import { useSourceId } from '@/store/db/useSourceId';
-import { ALBUM_CACHE_AMOUNT_OF_DAYS } from '@/CONSTANTS';
+import { useArtistsByAlphabet } from '@/store/artists/hooks';
+import Sync from '@/store/sources/sync-manager';
+import useSyncAction from '@/utility/useSyncAction';
 import AlbumImage from './components/AlbumImage';
-import { SectionArtistItem } from '@/store/music/types';
 import AlphabetScroller from '@/components/AlphabetScroller';
 import styled from 'styled-components/native';
 import useDefaultStyles, { ColoredBlurView } from '@/components/Colors';
@@ -17,6 +14,7 @@ import { NavigationProp } from '@/screens/types';
 import { SafeFlashList, useNavigationOffsets } from '@/components/SafeNavigatorView';
 import { Gap } from '@/components/Utility';
 import { FlashListRef } from '@shopify/flash-list';
+import type { Artist } from '@/store/artists/types';
 
 const SectionContainer = styled.View`
     justify-content: center;
@@ -59,9 +57,9 @@ const SectionHeading = React.memo(function SectionHeading(props: { label: string
 });
 
 interface GeneratedArtistItemProps {
-    item: SectionArtistItem;
+    item: Artist;
     imageURL: string | undefined;
-    onPress: (payload: { id: string; name: string; }) => void;
+    onPress: (artist: Artist) => void;
 }
 
 const GeneratedArtistItem = React.memo(function GeneratedArtistItem(props: GeneratedArtistItemProps) {
@@ -69,7 +67,7 @@ const GeneratedArtistItem = React.memo(function GeneratedArtistItem(props: Gener
     const { item, imageURL, onPress } = props;
 
     const handlePress = useCallback(() => {
-        onPress({ id: item.Id, name: item.Name });
+        onPress(item);
     }, [item, onPress]);
 
     return (
@@ -92,7 +90,7 @@ const GeneratedArtistItem = React.memo(function GeneratedArtistItem(props: Gener
                             { flexShrink: 1 }
                         ]}
                     >
-                        {item.Name}
+                        {item.name}
                     </Text>
                 </>
             )}
@@ -100,76 +98,66 @@ const GeneratedArtistItem = React.memo(function GeneratedArtistItem(props: Gener
     );
 });
 
-const Artists: React.FC = () => {
-    // Retrieve data from store
-    const sourceId = useSourceId();
-    const { isLoading, lastRefreshed } = useArtists();
-    const sections = useArtistsByAlphabet();
-    
-    // Initialise helpers
-    const navigation = useNavigation<NavigationProp>();
-    const getImage = useGetImage();
-    const listRef = useRef<FlashListRef<string | SectionArtistItem>>(null);
+type SectionRow =
+    | { type: 'header'; label: string }
+    | { type: 'row'; artist: Artist };
 
-    // Convert sections to flat array format for FlashList
-    const flatData = useMemo(() => {
-        const data: (string | SectionArtistItem)[] = [];
-        sections.forEach((section) => {
-            if (!section.data.length) return;
-            // Add section header
-            data.push(section.label);
-            // Add section items
-            section.data.forEach((item) => {
-                data.push(item);
-            });
-        });
-        return data;
+const Artists: React.FC = () => {
+    const sections = useArtistsByAlphabet();
+
+    const navigation = useNavigation<NavigationProp>();
+
+    const listRef = useRef<FlashListRef<SectionRow>>(null);
+
+    const flatData = useMemo<SectionRow[]>(() => {
+        const rows: SectionRow[] = [];
+        for (const section of sections) {
+            if (section.data.length === 0) continue;
+            rows.push({ type: 'header', label: section.label });
+            for (const artist of section.data) {
+                rows.push({ type: 'row', artist });
+            }
+        }
+        return rows;
     }, [sections]);
 
-    // Compute sticky header indices
-    const stickyHeaderIndices = useMemo(() => {
-        return flatData
-            .map((item, index) => typeof item === 'string' ? index : null)
-            .filter((item): item is number => item !== null);
-    }, [flatData]);
-    
-    // Set callbacks
-    const retrieveData = useCallback(async () => await musicFetchers.fetchAndStoreAllArtists(), []);
-    const selectArtist = useCallback((payload: { id: string; name: string; }) => (
-        navigation.navigate('Artist', payload)
-    ), [navigation]);
-    const selectLetter = useCallback(({ letter }: { letter: string, index: number }) => { 
-        const index = flatData.findIndex((item) => (
-            typeof item === 'string' && item === letter
-        ));
+    const stickyHeaderIndices = useMemo(
+        () => flatData
+            .map((item, index) => item.type === 'header' ? index : null)
+            .filter((i): i is number => i !== null),
+        [flatData]
+    );
+
+    const [isLoading, retrieveData] = useSyncAction(Sync.syncArtists);
+
+    const selectArtist = useCallback((artist: Artist) => {
+        navigation.navigate('Artist', { id: [artist.sourceId, artist.id] });
+    }, [navigation]);
+
+    const selectLetter = useCallback(({ letter }: { letter: string; index: number }) => {
+        const index = flatData.findIndex(
+            item => item.type === 'header' && item.label === letter
+        );
         if (index !== -1) {
             listRef.current?.scrollToIndex({ index, animated: false });
         }
     }, [flatData]);
 
-    const renderItem = useCallback(({ item }: { item: string | SectionArtistItem }) => {
-        if (typeof item === 'string') {
-            return <SectionHeading label={item} />;
+    const renderItem = useCallback(({ item }: { item: SectionRow }) => {
+        if (item.type === 'header') {
+            return <SectionHeading label={item.label} />;
         }
         return (
             <View style={{ flexDirection: 'row', marginLeft: 10, marginRight: 32 }}>
                 <GeneratedArtistItem
-                    key={item.Id}
-                    item={item}
+                    item={item.artist}
+                    imageURL={Artwork.getUrlSync(item.artist)}
                     onPress={selectArtist}
-                    imageURL={getImage(item)}
                 />
             </View>
         );
-    }, [getImage, selectArtist]);
+    }, [selectArtist]);
 
-    // Retrieve data on mount
-    useEffect(() => { 
-        if (!lastRefreshed || differenceInDays(lastRefreshed, new Date()) > ALBUM_CACHE_AMOUNT_OF_DAYS) {
-            retrieveData(); 
-        }
-    });
-    
     return (
         <>
             <AlphabetScroller onSelect={selectLetter} />
@@ -180,7 +168,10 @@ const Artists: React.FC = () => {
                 ref={listRef}
                 renderItem={renderItem}
                 stickyHeaderIndices={stickyHeaderIndices}
-                getItemType={(item) => typeof item === 'string' ? 'sectionHeader' : 'row'}
+                getItemType={item => item.type}
+                keyExtractor={(item, index) =>
+                    item.type === 'header' ? `header-${item.label}` : `row-${index}`
+                }
             />
         </>
     );

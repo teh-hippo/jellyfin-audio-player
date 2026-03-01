@@ -1,48 +1,37 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useMemo } from 'react';
 import { useRoute, RouteProp } from '@react-navigation/native';
-import { usePlaylists, useTracksByPlaylist } from '@/store/music/hooks';
-import * as musicFetchers from '@/store/music/fetchers';
-import { useSourceId } from '@/store/db/useSourceId';
+import { usePlaylist } from '@/store/playlists/hooks';
+import { useTracksByPlaylist } from '@/store/tracks/hooks';
+import Sync from '@/store/sources/sync-manager';
+import useSyncAction from '@/utility/useSyncAction';
 import TrackListView from './components/TrackListView';
-import { differenceInDays } from 'date-fns';
-import { ALBUM_CACHE_AMOUNT_OF_DAYS } from '@/CONSTANTS';
 import { t } from '@/localisation';
 import { StackParams } from '@/screens/types';
+import type { EntityId } from '@/store/types';
 
 type Route = RouteProp<StackParams, 'Playlist'>;
 
 const Playlist: React.FC = () => {
     const { params: { id } } = useRoute<Route>();
 
-    // Retrieve the playlist data from the store
-    const sourceId = useSourceId();
-    const { playlists } = usePlaylists();
-    const playlist = playlists[id];
-    const { ids: playlistTrackIds } = useTracksByPlaylist(id);
+    const entityId = useMemo<EntityId>(() => id, [id]);
 
-    // Define a function for refreshing this entity
-    const refresh = useCallback(
-        async () => await musicFetchers.fetchAndStoreTracksByPlaylist(id),
-        [id]
-    );
+    const { data: playlist } = usePlaylist(entityId);
+    const { data: tracks } = useTracksByPlaylist(entityId);
 
-    // Auto-fetch the track data periodically
-    useEffect(() => {
-        if (!playlist?.lastRefreshed || differenceInDays(playlist?.lastRefreshed, new Date()) > ALBUM_CACHE_AMOUNT_OF_DAYS) {
-            refresh();
-        }
-    }, [playlist?.lastRefreshed, refresh]);
+    const [isLoading, refresh] = useSyncAction(() => Sync.syncPlaylistTracks(entityId));
 
     return (
         <TrackListView
-            trackIds={playlistTrackIds || []}
-            title={playlist?.Name}
-            entityId={id}
+            tracks={tracks ?? []}
+            title={playlist?.name ?? ''}
+            entityId={entityId}
             refresh={refresh}
+            isLoading={isLoading}
             listNumberingStyle='index'
             playButtonText={t('play-playlist')}
             shuffleButtonText={t('shuffle-playlist')}
-            downloadButtonText={t('download-playlist')} 
+            downloadButtonText={t('download-playlist')}
             deleteButtonText={t('delete-playlist')}
             itemDisplayStyle='playlist'
         />
