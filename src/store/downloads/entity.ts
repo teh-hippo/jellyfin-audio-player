@@ -1,4 +1,5 @@
 import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
+import { jsonColumn } from '../database/column-types';
 import sources from '../sources/entity';
 
 /**
@@ -13,7 +14,7 @@ const downloads = sqliteTable('downloads', {
     progress: integer('progress'),
     isFailed: integer('is_failed', { mode: 'boolean' }).notNull(),
     isComplete: integer('is_complete', { mode: 'boolean' }).notNull(),
-    metadata: text('metadata'), // JSON-encoded additional fields
+    metadata: jsonColumn<unknown>('metadata'),
     createdAt: integer('created_at').notNull().$defaultFn(() => Date.now()),
     updatedAt: integer('updated_at').notNull().$defaultFn(() => Date.now()).$onUpdateFn(() => Date.now()),
 });

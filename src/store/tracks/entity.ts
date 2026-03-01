@@ -1,4 +1,5 @@
 import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
+import { jsonColumn } from '../database/column-types';
 import sources from '../sources/entity';
 
 /**
@@ -28,7 +29,7 @@ const tracks = sqliteTable('tracks', {
     /** Cached lyrics text, populated on demand. */
     lyrics: text('lyrics'),
     /** Full source API response serialised as JSON, for fields not promoted to dedicated columns. */
-    metadata: text('metadata'),
+    metadata: jsonColumn<unknown>('metadata'),
     /**
      * When this record was first synced from the server locally. Set once on
      * insert and never updated — use for stable sorting when remote dates are absent.

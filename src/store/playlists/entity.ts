@@ -1,4 +1,5 @@
 import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
+import { jsonColumn } from '../database/column-types';
 import sources from '../sources/entity';
 
 /**
@@ -16,7 +17,7 @@ const playlists = sqliteTable('playlists', {
     /** Number of tracks in the playlist, if provided by the server. */
     childCount: integer('child_count'),
     /** Full source API response serialized as JSON, for fields not mapped to dedicated columns. */
-    metadata: text('metadata'),
+    metadata: jsonColumn<unknown>('metadata'),
     /**
      * When this record was first synced from the server into the local database.
      * Set once on insert and never updated. Useful as a stable sort fallback.

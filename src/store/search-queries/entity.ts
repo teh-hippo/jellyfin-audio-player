@@ -1,4 +1,5 @@
 import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
+import { jsonColumn } from '../database/column-types';
 import sources from '../sources/entity';
 
 /**
@@ -10,7 +11,7 @@ const searchQueries = sqliteTable('search_queries', {
     query: text('query').notNull(),
     timestamp: integer('timestamp').notNull(),
     localPlaybackOnly: integer('local_playback_only', { mode: 'boolean' }).notNull(),
-    metadata: text('metadata'), // JSON-encoded additional fields
+    metadata: jsonColumn<unknown>('metadata'),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
 }, (table) => [

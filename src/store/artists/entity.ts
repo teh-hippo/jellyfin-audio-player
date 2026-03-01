@@ -1,4 +1,5 @@
 import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
+import { jsonColumn } from '../database/column-types';
 import sources from '../sources/entity';
 
 /**
@@ -14,7 +15,7 @@ const artists = sqliteTable('artists', {
     /** Whether this artist is represented as a folder on the server. */
     isFolder: integer('is_folder', { mode: 'boolean' }).notNull(),
     /** Full source API response serialized as JSON. Preserves all fields not mapped to dedicated columns. */
-    metadata: text('metadata'),
+    metadata: jsonColumn<unknown>('metadata'),
     /**
      * Timestamp of when this record was first synced from the server (local time).
      * Set once on insert and never overwritten — use this as a stable sort fallback.
