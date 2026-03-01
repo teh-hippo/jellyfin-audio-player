@@ -12,13 +12,23 @@
  *   source credentials; the manager just routes to the right driver.
  * - Works with any member of the ArtworkEntity union, which covers every
  *   entity table in the local database.
+ * - Provides both a synchronous and an async variant:
+ *   - getUrlSync  — for render paths (useMemo, useCallback, JSX); returns
+ *                   undefined if the registry cache is not yet warm.
+ *   - getUrl      — for imperative / async contexts; always waits for the
+ *                   registry to finish building before resolving.
  *
  * Usage
  * -----
- *   import { artworkManager } from '@/store/sources/artwork-manager';
+ *   import Artwork from '@/store/sources/artwork-manager';
  *
- *   const url = await artworkManager.getUrl(album);
- *   const url = await artworkManager.getUrl(track, { width: 512 });
+ *   // Synchronous (render path):
+ *   const url = Artwork.getUrlSync(album);
+ *   const url = Artwork.getUrlSync(track, { width: 512 });
+ *
+ *   // Async (imperative path):
+ *   const url = await Artwork.getUrl(album);
+ *   const url = await Artwork.getUrl(track, { width: 512 });
  */
 
 import type { ArtworkEntity, ArtworkOptions } from './types';
@@ -26,16 +36,47 @@ import { driverRegistry } from './drivers/registry';
 
 class ArtworkManager {
     /**
-     * Resolve an artwork URL for a given entity.
+     * Synchronously resolve an artwork URL for a given entity.
      *
-     * Looks up the driver registered for `entity.sourceId` in the driver
-     * registry and delegates to its `getArtworkUrl` method. Returns `undefined`
-     * when no driver is registered for the entity's source (e.g. source was
-     * removed) or when the driver itself cannot produce a URL.
+     * Reads from the driver registry's warm cache — no async work is done.
+     * Returns `undefined` when the cache has not yet been populated (i.e. on
+     * the very first render before the initial build completes) or when no
+     * driver is registered for the entity's source.
      *
-     * @param entity   Any member of the ArtworkEntity union.
-     * @param options  Optional hints for image dimensions, quality, and format.
-     * @returns        A fully-qualified image URL, or `undefined`.
+     * Because the registry eagerly builds on construction, the cache is warm
+     * by the time the first screen renders in practice, so `undefined` is only
+     * ever returned transiently.
+     *
+     * Safe to call inside `useMemo`, `useCallback`, and JSX — no side-effects,
+     * no awaiting.
+     */
+    getUrlSync(
+        entity: ArtworkEntity | null | undefined,
+        options?: ArtworkOptions,
+    ): string | undefined {
+        if (!entity) {
+            return undefined;
+        }
+
+        const driver = driverRegistry.getByIdSync(entity.sourceId);
+
+        if (!driver) {
+            return undefined;
+        }
+
+        return driver.getArtworkUrl(entity, options);
+    }
+
+    /**
+     * Asynchronously resolve an artwork URL for a given entity.
+     *
+     * Waits for the driver registry to finish its initial build before
+     * resolving, so this always returns a result even if called before the
+     * cache is warm. Prefer `getUrlSync` on render paths.
+     *
+     * Returns `undefined` when no driver is registered for the entity's source
+     * (e.g. the source was removed) or when the driver itself cannot produce a
+     * URL.
      */
     async getUrl(
         entity: ArtworkEntity,
@@ -57,15 +98,11 @@ class ArtworkManager {
     }
 
     /**
-     * Resolve artwork URLs for a batch of entities in a single call.
+     * Resolve artwork URLs for a batch of entities in a single async call.
      *
      * Entities belonging to different sources are dispatched to their
      * respective drivers concurrently. The result array preserves the input
      * order; entries whose driver is missing resolve to `undefined`.
-     *
-     * @param entities  An array of ArtworkEntity members.
-     * @param options   Optional hints applied uniformly to every item.
-     * @returns         An array of URL strings (or `undefined`) in input order.
      */
     async getBatchUrls(
         entities: ArtworkEntity[],
@@ -82,7 +119,7 @@ class ArtworkManager {
  *
  * Import this wherever an artwork URL is needed:
  *
- *   import { artworkManager } from '@/store/sources/artwork-manager';
+ *   import Artwork from '@/store/sources/artwork-manager';
  */
 const Artwork = new ArtworkManager();
 

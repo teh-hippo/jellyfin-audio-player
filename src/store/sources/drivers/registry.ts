@@ -75,6 +75,22 @@ class DriverRegistry {
     }
 
     /**
+     * Synchronously return the driver for a specific source from the warm
+     * cache, or `undefined` if the cache is not yet populated or no driver
+     * exists for that sourceId.
+     *
+     * Safe to call on every render — returns `undefined` gracefully rather
+     * than throwing when called before the initial build completes. Because
+     * the registry eagerly builds on construction the cache is warm by the
+     * time the first screen renders in practice.
+     *
+     * @param sourceId  The stable source identifier (primary key in `sources`).
+     */
+    getByIdSync(sourceId: string): SourceDriver | undefined {
+        return this.cache?.get(sourceId);
+    }
+
+    /**
      * Return all drivers as an ordered array.
      *
      * Useful when iterating every source without needing the keyed map.
