@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { Button, View } from 'react-native';
+import { SourceCredentials } from '@/store/sources/types';
 import Modal from '@/components/Modal';
 import Input from '@/components/Input';
 import { setCredentials } from '@/store/sources/actions';
@@ -20,7 +21,7 @@ export default function SetJellyfinServer() {
     const navigation = useNavigation();
 
     // Save creedentials to store and close the modal
-    const saveCredentials = useCallback((credentials?: { uri: string; userId: string; accessToken: string; deviceId: string; type: 'jellyfin' | 'emby' }) => {
+    const saveCredentials = useCallback((credentials?: SourceCredentials) => {
         if (credentials) {
             setCredentials(credentials);
             navigation.dispatch(StackActions.popToTop());

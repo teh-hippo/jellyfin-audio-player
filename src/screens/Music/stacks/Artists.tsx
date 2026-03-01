@@ -151,7 +151,7 @@ const Artists: React.FC = () => {
             <View style={{ flexDirection: 'row', marginLeft: 10, marginRight: 32 }}>
                 <GeneratedArtistItem
                     item={item.artist}
-                    imageURL={Artwork.getUrlSync(item.artist)}
+                    imageURL={Artwork.getUrl(item.artist)}
                     onPress={selectArtist}
                 />
             </View>

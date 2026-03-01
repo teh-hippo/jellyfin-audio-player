@@ -149,7 +149,7 @@ export class SourceSync {
         // Resolve which sources to target — one specific source, or all of them.
         const sourceIds = sourceId
             ? [sourceId]
-            : [...(await driverRegistry.getAll()).keys()];
+            : [...driverRegistry.getAll().keys()];
 
         // Persist a cursor row for each target source so the work survives a
         // restart, then collect the completion promise for each one.
@@ -250,7 +250,7 @@ export class SourceSync {
 
     private async executeTask(cursor: SyncCursor): Promise<void> {
         // A cursor without a matching driver has nowhere to fetch from — skip it.
-        const driver = await driverRegistry.getById(cursor.sourceId);
+        const driver = driverRegistry.getById(cursor.sourceId);
         if (!driver) return;
 
         const { sourceId, entityType, parentEntityId, startIndex } = cursor;

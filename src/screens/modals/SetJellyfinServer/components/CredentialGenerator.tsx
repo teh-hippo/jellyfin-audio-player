@@ -1,16 +1,11 @@
 import React, { useRef, useCallback, useMemo } from 'react';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import { debounce } from 'lodash';
+import { SourceType, SourceCredentials } from '@/store/sources/types';
 
 interface Props {
     serverUrl: string;
-    onCredentialsRetrieved: (credentials: {
-        uri: string;
-        userId: string;
-        accessToken: string;
-        deviceId: string;
-        type: 'emby' | 'jellyfin';
-    }) => void;
+    onCredentialsRetrieved: (credentials: SourceCredentials) => void;
 }
 
 type CredentialEventData = {
@@ -35,7 +30,7 @@ type CredentialEventData = {
         }[]
     },
     deviceId: string,
-    type: 'emby',
+    type: SourceType.EMBY_V1,
 } | {
     credentials: {
         Servers: {
@@ -51,7 +46,7 @@ type CredentialEventData = {
         }[]
     },
     deviceId: string,
-    type: 'jellyfin',
+    type: SourceType.JELLYFIN_V1,
 } | undefined;
 
 const CredentialGenerator: React.FC<Props> = ({ serverUrl, onCredentialsRetrieved }) => {
@@ -62,12 +57,12 @@ const CredentialGenerator: React.FC<Props> = ({ serverUrl, onCredentialsRetrieve
             try { 
                 let credentials = JSON.parse(window.localStorage.getItem('jellyfin_credentials'));
                 let deviceId = window.localStorage.getItem('_deviceId2');
-                window.ReactNativeWebView.postMessage(JSON.stringify({ credentials, deviceId, type: 'jellyfin' })) 
+                window.ReactNativeWebView.postMessage(JSON.stringify({ credentials, deviceId, type: 'jellyfin.v1' })) 
             } catch(e) { }; true;
             try {  
                 let credentials = JSON.parse(window.localStorage.getItem('servercredentials3'));
                 let deviceId = window.localStorage.getItem('_deviceId2');
-                window.ReactNativeWebView.postMessage(JSON.stringify({ credentials, deviceId, type: 'emby' })) 
+                window.ReactNativeWebView.postMessage(JSON.stringify({ credentials, deviceId, type: 'emby.v1' })) 
             } catch(e) { }; true;
         `);
     }, 500), []);
@@ -90,14 +85,14 @@ const CredentialGenerator: React.FC<Props> = ({ serverUrl, onCredentialsRetrieve
         let userId: string | undefined, accessToken: string | undefined;
 
         // GUARD: Attempt to extract emby format credentials
-        if (data?.type === 'emby'
+        if (data?.type === SourceType.EMBY_V1
             && data.credentials?.Servers?.length
             && data.credentials?.Servers[0]?.Users?.length
         ) {
             userId = data.credentials.Servers[0].Users[0].UserId;
             accessToken = data.credentials.Servers[0].Users[0].AccessToken;
         // GUARD: Attempt to extract jellyfin format credentials
-        } else if (data?.type === 'jellyfin'
+        } else if (data?.type === SourceType.JELLYFIN_V1
             && data.credentials?.Servers?.length
         ) {
             userId = data.credentials.Servers[0].UserId || undefined;

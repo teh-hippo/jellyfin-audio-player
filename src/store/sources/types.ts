@@ -24,6 +24,19 @@ export enum SourceType {
 export type Source = InferSelectModel<typeof sources>;
 
 /**
+ * Credential payload produced by CredentialGenerator and consumed by
+ * setCredentials. Shared across the onboarding flow so the type is
+ * defined once here rather than duplicated at each call site.
+ */
+export interface SourceCredentials {
+    uri: string;
+    userId: string;
+    accessToken: string;
+    deviceId: string;
+    type: SourceType;
+}
+
+/**
  * Source info returned during connection
  */
 export interface SourceInfo {

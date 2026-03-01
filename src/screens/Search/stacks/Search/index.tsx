@@ -374,7 +374,7 @@ export default function Search() {
                                         <SearchResult>
                                             <ShadowWrapper>
                                                 <SearchItemImage
-                                                    source={{ uri: Artwork.getUrlSync(item) }}
+                                                    source={{ uri: Artwork.getUrl(item) }}
                                                     style={defaultStyles.imageBackground}
                                                 />
                                             </ShadowWrapper>

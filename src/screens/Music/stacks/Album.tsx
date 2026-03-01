@@ -44,7 +44,7 @@ function SimilarAlbum({ album }: { album: Album }) {
             })}
             onPress={handlePress}
         >
-            <Cover source={{ uri: Artwork.getUrlSync(album) }} />
+            <Cover source={{ uri: Artwork.getUrl(album) }} />
             <Text numberOfLines={1} style={{ fontSize: 13, marginBottom: 2 }}>{album.name}</Text>
             <Text numberOfLines={1} style={{ opacity: 0.5, fontSize: 13 }}>{album.albumArtist}</Text>
         </Pressable>

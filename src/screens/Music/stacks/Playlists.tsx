@@ -76,13 +76,13 @@ const Playlists: React.FC = () => {
             <View style={{ flexDirection: 'row', marginLeft: 10, marginRight: 10 }} key={item.id}>
                 <GeneratedPlaylistItem
                     playlist={item}
-                    imageUrl={Artwork.getUrlSync(item)}
+                    imageUrl={Artwork.getUrl(item)}
                     onPress={selectPlaylist}
                 />
                 {nextItem && (
                     <GeneratedPlaylistItem
                         playlist={nextItem}
-                        imageUrl={Artwork.getUrlSync(nextItem)}
+                        imageUrl={Artwork.getUrl(nextItem)}
                         onPress={selectPlaylist}
                     />
                 )}

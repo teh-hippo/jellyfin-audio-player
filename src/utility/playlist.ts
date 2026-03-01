@@ -16,7 +16,7 @@ import type { TrackWithDownload } from '@/store/tracks/hooks';
  * they are already playing it.
  */
 export async function retrieveInstantMixByTrackId([sourceId, trackId]: EntityId): Promise<TrackWithDownload[]> {
-    const driver = await driverRegistry.getById(sourceId);
+    const driver = driverRegistry.getById(sourceId);
 
     if (!driver) {
         console.warn('[playlist] No driver found for source', sourceId);

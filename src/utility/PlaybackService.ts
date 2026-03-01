@@ -40,7 +40,7 @@ async function sendPlaybackEvent(
         }
 
         const [sourceId, trackId] = entityId;
-        const driver = await driverRegistry.getById(sourceId);
+        const driver = driverRegistry.getById(sourceId);
         if (!driver) {
             return;
         }

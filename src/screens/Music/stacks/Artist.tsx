@@ -83,7 +83,7 @@ export default function Artist() {
                     <GeneratedAlbumItem
                         key={album.id}
                         album={album}
-                        imageUrl={Artwork.getUrlSync(album)}
+                        imageUrl={Artwork.getUrl(album)}
                         onPress={selectAlbum}
                     />
                 ))}
@@ -101,7 +101,7 @@ export default function Artist() {
             ListHeaderComponent={
                 <View style={{ padding: 24, paddingTop: 0, paddingBottom: 8 }}>
                     <ArtistImageContainer>
-                        <CoverImage src={artist ? Artwork.getUrlSync(artist) : undefined} margin={48} height={200} />
+                        <CoverImage src={artist ? Artwork.getUrl(artist) : undefined} margin={48} height={200} />
                     </ArtistImageContainer>
                     {artistMetadata?.Overview ? <CollapsibleText text={artistMetadata.Overview} /> : null}
                     <SubHeader>{t('albums')}</SubHeader>

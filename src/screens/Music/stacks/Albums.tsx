@@ -133,7 +133,7 @@ const Albums: React.FC = () => {
                     <GeneratedAlbumItem
                         key={album.id}
                         album={album}
-                        imageUrl={Artwork.getUrlSync(album)}
+                        imageUrl={Artwork.getUrl(album)}
                         onPress={selectAlbum}
                     />
                 ))}

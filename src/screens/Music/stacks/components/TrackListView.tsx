@@ -277,7 +277,7 @@ const TrackListView: React.FC<TrackListViewProps> = ({
         >
             <View style={{ padding: 24, paddingTop: 32, paddingBottom: 32 }}>
                 <AlbumImageContainer>
-                    <CoverImage src={Artwork.getUrlSync(coverEntity)} />
+                    <CoverImage src={Artwork.getUrl(coverEntity)} />
                 </AlbumImageContainer>
                 <Header>{title}</Header>
                 <SubHeader>{artist}</SubHeader>

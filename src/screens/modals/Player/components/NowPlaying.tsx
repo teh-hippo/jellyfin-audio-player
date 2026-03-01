@@ -13,7 +13,7 @@ const ArtworkImage = styled(CoverImage)`
 export default function NowPlaying() {
     const { track, albumTrack } = useCurrentTrack();
     const imageSrc = useMemo(() => {
-        return track?.artwork as string ?? (albumTrack && Artwork.getUrlSync(albumTrack));
+        return track?.artwork as string ?? (albumTrack && Artwork.getUrl(albumTrack));
     }, [track, albumTrack]);
 
     return (

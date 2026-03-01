@@ -1,7 +1,12 @@
 import { db, sqliteDb } from "..";
 import getDriverBySource from "./drivers";
-import { SourceType } from "./types";
+import { SourceType, SourceCredentials } from "./types";
 import sources from "./entity";
+import { eq } from "drizzle-orm";
+import type { InferSelectModel } from "drizzle-orm";
+import { driverRegistry } from "./drivers/registry";
+
+type Source = InferSelectModel<typeof sources>;
 
 /**
  * Retrieve all sources from the database
@@ -28,37 +33,43 @@ export async function getAllSourceDrivers() {
 }
 
 /**
- * Upsert Jellyfin/Emby credentials as a source row.
+ * Find an existing source row by server URI and userId.
+ *
+ * Useful for checking whether a server has already been added before
+ * inserting a new row, without relying on the primary key.
  */
-export async function setCredentials(credentials: {
-    uri: string;
-    userId: string;
-    accessToken: string;
-    deviceId: string;
-    type: 'jellyfin' | 'emby';
-}): Promise<void> {
-    const sourceType = credentials.type === 'jellyfin' ? 'jellyfin.v1' : 'emby.v1';
-    const sourceId = credentials.deviceId;
+export async function getSourceByServer(uri: string, userId: string): Promise<Source | undefined> {
+    return db.query.sources.findFirst({
+        where: {
+            uri,
+            userId,
+        },
+    });
+}
 
-    await db.insert(sources)
-        .values({
-            id: sourceId,
-            uri: credentials.uri,
-            userId: credentials.userId,
-            accessToken: credentials.accessToken,
-            deviceId: credentials.deviceId,
-            type: sourceType,
-        })
-        .onConflictDoUpdate({
-            target: sources.id,
-            set: {
-                uri: credentials.uri,
-                userId: credentials.userId,
-                accessToken: credentials.accessToken,
-                deviceId: credentials.deviceId,
-                type: sourceType,
-            },
-        });
+/**
+ * Upsert Jellyfin/Emby credentials as a source row.
+ *
+ * If a row already exists for the same (uri, userId) pair it is updated in
+ * place; otherwise a new row is inserted with a fresh random UUID as the
+ * primary key.
+ */
+export async function setCredentials(credentials: SourceCredentials): Promise<void> {
+    // Check if a source already exists for this server URI and userId
+    const existing = await getSourceByServer(credentials.uri, credentials.userId);
 
-    sqliteDb.flushPendingReactiveQueries();
+    // If so, update the existing row with the new credentials; otherwise insert
+    if (existing) {
+        await db.update(sources)
+            .set(credentials)
+            .where(eq(sources.id, existing.id));
+    } else {
+        await db.insert(sources).values(credentials);
+    }
+
+    // Flush pending reactive queries so any UI subscribed to `sources` updates
+    await sqliteDb.flushPendingReactiveQueries();
+
+    // Refresh the driver registry so any changes are reflected in the in-memory cache and active drivers
+    await driverRegistry.refresh();
 }

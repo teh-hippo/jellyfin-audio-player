@@ -4,7 +4,7 @@ import type { Track } from '@/store/tracks/types';
 import { driverRegistry } from '@/store/sources/drivers/registry';
 
 export async function generateTrack(track: Track): Promise<PlayerTrack> {
-    const driver = await driverRegistry.getById(track.sourceId);
+    const driver = driverRegistry.getById(track.sourceId);
     const url = driver ? await driver.getStreamUrl(track.id) : '';
     const artwork = driver ? driver.getArtworkUrl(track) : undefined;
 

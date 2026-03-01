@@ -75,7 +75,7 @@ function TrackPopupMenu() {
     return (
         <ColoredBlurView style={{flex: 1}}>
             <Container>
-                <ArtworkImage src={track ? Artwork.getUrlSync(track) : undefined} />
+                <ArtworkImage src={track ? Artwork.getUrl(track) : undefined} />
                 <Header>{track?.name}</Header>
                 <SubHeader style={{ marginBottom: 18 }}>{track?.albumArtist} {track?.album ? '— ' + track?.album : ''}</SubHeader>
                 <WrappableButtonRow>

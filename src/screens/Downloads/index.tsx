@@ -68,7 +68,7 @@ function DownloadRow({
             <DownloadedTrack>
                 <View style={{ marginRight: 12 }}>
                     <ShadowWrapper size="small">
-                        <AlbumImage source={{ uri: Artwork.getUrlSync(track) }} style={defaultStyles.imageBackground} />
+                        <AlbumImage source={{ uri: Artwork.getUrl(track) }} style={defaultStyles.imageBackground} />
                     </ShadowWrapper>
                 </View>
                 <View style={{ flexShrink: 1, marginRight: 8 }}>

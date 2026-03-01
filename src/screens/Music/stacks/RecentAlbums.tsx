@@ -93,7 +93,7 @@ const RecentAlbums: React.FC = () => {
                 >
                     <AlbumItem>
                         <ShadowWrapper size="medium">
-                            <AlbumImage source={{ uri: Artwork.getUrlSync(album) }} style={defaultStyles.imageBackground} />
+                            <AlbumImage source={{ uri: Artwork.getUrl(album) }} style={defaultStyles.imageBackground} />
                         </ShadowWrapper>
                         <Text style={defaultStyles.text} numberOfLines={1}>{album.name}</Text>
                         <Text style={defaultStyles.textHalfOpacity} numberOfLines={1}>{album.albumArtist}</Text>

@@ -236,7 +236,7 @@ class DownloadQueue {
         try {
             // Resolve the driver for this source. If the source was removed
             // since the row was written, there is nothing we can do.
-            const driver = await driverRegistry.getById(sourceId);
+            const driver = driverRegistry.getById(sourceId);
             if (!driver) throw new Error(`No driver found for source ${sourceId}`);
 
             // ---- Resolve download info ----------------------------------------
