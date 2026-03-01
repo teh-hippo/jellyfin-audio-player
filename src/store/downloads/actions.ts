@@ -36,7 +36,7 @@ export async function initializeDownload(
         progress: 0,
         isFailed: false,
         isComplete: false,
-        metadataJson: null,
+        metadata: null,
         createdAt: now,
         updatedAt: now,
     }).onConflictDoUpdate({

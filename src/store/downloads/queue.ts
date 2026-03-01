@@ -39,11 +39,11 @@ async function getDriver(): Promise<{ driver: SourceDriver; source: Source } | n
 async function updateDownloadMetadata(id: string, updates: Record<string, unknown>): Promise<void> {
     const existing = await db.select().from(downloads).where(eq(downloads.id, id)).limit(1);
     const current = existing[0];
-    const currentMetadata = current?.metadataJson ? JSON.parse(current.metadataJson) : {};
+    const currentMetadata = current?.metadata ? JSON.parse(current.metadata) : {};
 
     await db.update(downloads)
         .set({
-            metadataJson: JSON.stringify({ ...currentMetadata, ...updates }),
+            metadata: JSON.stringify({ ...currentMetadata, ...updates }),
             updatedAt: Date.now(),
         })
         .where(eq(downloads.id, id));

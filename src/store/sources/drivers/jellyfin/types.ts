@@ -31,6 +31,7 @@ export interface JellyfinBaseItem {
  */
 export interface JellyfinArtist extends JellyfinBaseItem {
     IsFolder: boolean;
+    DateCreated?: string;
 }
 
 /**
@@ -55,6 +56,7 @@ export interface JellyfinTrack extends JellyfinBaseItem {
     IndexNumber?: number;
     ParentIndexNumber?: number;
     RunTimeTicks?: number;
+    DateCreated?: string;
     ArtistItems?: JellyfinArtist[];
 }
 
@@ -64,6 +66,7 @@ export interface JellyfinTrack extends JellyfinBaseItem {
 export interface JellyfinPlaylist extends JellyfinBaseItem {
     CanDelete: boolean;
     ChildCount?: number;
+    DateCreated?: string;
 }
 
 /**

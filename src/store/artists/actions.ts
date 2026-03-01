@@ -7,25 +7,37 @@ import artists from './entity';
 import { eq } from 'drizzle-orm';
 import type { InsertArtist } from './types';
 
-export async function upsertArtist(artist: InsertArtist): Promise<void> {
-    const now = Date.now();
+/**
+ * createdAt and updatedAt are optional — they reflect server-reported dates and
+ * are stored as-is (null when the source does not provide them).
+ * firstSyncedAt and lastSyncedAt are always managed by the schema: firstSyncedAt
+ * is set once on insert and never overwritten; lastSyncedAt is set automatically
+ * on every insert and update via $defaultFn/$onUpdateFn.
+ */
+type UpsertArtist = Omit<InsertArtist, 'firstSyncedAt' | 'lastSyncedAt'>;
 
+export async function upsertArtist(artist: UpsertArtist): Promise<void> {
     await db.insert(artists).values({
         ...artist,
-        createdAt: now,
-        updatedAt: now,
     }).onConflictDoUpdate({
         target: artists.id,
         set: {
-            ...artist,
-            updatedAt: now,
+            sourceId: artist.sourceId,
+            name: artist.name,
+            isFolder: artist.isFolder,
+            metadata: artist.metadata,
+            // Use the source-provided dates as-is; null if the source omits them.
+            createdAt: artist.createdAt,
+            updatedAt: artist.updatedAt,
+            // firstSyncedAt is intentionally excluded — preserve the original insert value.
+            // lastSyncedAt is handled automatically by $onUpdateFn.
         },
     });
 
     sqliteDb.flushPendingReactiveQueries();
 }
 
-export async function upsertArtists(artistList: InsertArtist[]): Promise<void> {
+export async function upsertArtists(artistList: UpsertArtist[]): Promise<void> {
     for (const artist of artistList) {
         await upsertArtist(artist);
     }

@@ -2,11 +2,13 @@
 
 import journal from './meta/_journal.json';
 import m0000 from './0000_cuddly_captain_cross.sql';
+import m0001 from './0001_tiny_warbound.sql';
 
-export default {
+  export default {
     journal,
     migrations: {
-        m0000
+      m0000,
+m0001
     }
-}
+  }
   

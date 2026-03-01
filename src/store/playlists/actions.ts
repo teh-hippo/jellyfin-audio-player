@@ -4,29 +4,40 @@
 
 import { db, sqliteDb } from '@/store';
 import playlists from './entity';
-import playlistTracks from '@/store/playlist-tracks/entity';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import type { InsertPlaylist } from './types';
 
-export async function upsertPlaylist(playlist: InsertPlaylist): Promise<void> {
-    const now = Date.now();
+/**
+ * createdAt and updatedAt are optional — they reflect server-provided timestamps
+ * and may be null if the server does not supply them.
+ * firstSyncedAt and lastSyncedAt are omitted from the input type and managed
+ * entirely by the schema: firstSyncedAt is set once on insert and never
+ * overwritten; lastSyncedAt is set automatically on every insert and update.
+ */
+type UpsertPlaylist = Omit<InsertPlaylist, 'firstSyncedAt' | 'lastSyncedAt'>;
 
+export async function upsertPlaylist(playlist: UpsertPlaylist): Promise<void> {
     await db.insert(playlists).values({
         ...playlist,
-        createdAt: now,
-        updatedAt: now,
     }).onConflictDoUpdate({
         target: playlists.id,
         set: {
-            ...playlist,
-            updatedAt: now,
+            sourceId: playlist.sourceId,
+            name: playlist.name,
+            canDelete: playlist.canDelete,
+            childCount: playlist.childCount,
+            metadata: playlist.metadata,
+            // Take server-provided timestamps when available, otherwise leave null.
+            // firstSyncedAt is intentionally excluded — it is set once on insert and never changed.
+            createdAt: playlist.createdAt ?? null,
+            updatedAt: playlist.updatedAt ?? null,
         },
     });
 
     sqliteDb.flushPendingReactiveQueries();
 }
 
-export async function upsertPlaylists(playlistList: InsertPlaylist[]): Promise<void> {
+export async function upsertPlaylists(playlistList: UpsertPlaylist[]): Promise<void> {
     for (const playlist of playlistList) {
         await upsertPlaylist(playlist);
     }
@@ -39,27 +50,5 @@ export async function deletePlaylist(id: string): Promise<void> {
 
 export async function deletePlaylistsBySource(sourceId: string): Promise<void> {
     await db.delete(playlists).where(eq(playlists.sourceId, sourceId));
-    sqliteDb.flushPendingReactiveQueries();
-}
-
-export async function setPlaylistTracks(sourceId: string, playlistId: string, trackIds: string[]): Promise<void> {
-    await db.delete(playlistTracks).where(
-        and(
-            eq(playlistTracks.sourceId, sourceId),
-            eq(playlistTracks.playlistId, playlistId)
-        )
-    );
-
-    if (trackIds.length > 0) {
-        await db.insert(playlistTracks).values(
-            trackIds.map((trackId, index) => ({
-                sourceId,
-                playlistId,
-                trackId,
-                position: index,
-            }))
-        );
-    }
-
     sqliteDb.flushPendingReactiveQueries();
 }

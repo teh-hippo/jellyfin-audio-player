@@ -13,7 +13,7 @@ const downloads = sqliteTable('downloads', {
     progress: integer('progress'),
     isFailed: integer('is_failed', { mode: 'boolean' }).notNull(),
     isComplete: integer('is_complete', { mode: 'boolean' }).notNull(),
-    metadataJson: text('metadata_json'), // JSON-encoded additional fields
+    metadata: text('metadata'), // JSON-encoded additional fields
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
 });

@@ -10,7 +10,7 @@ const searchQueries = sqliteTable('search_queries', {
     query: text('query').notNull(),
     timestamp: integer('timestamp').notNull(),
     localPlaybackOnly: integer('local_playback_only', { mode: 'boolean' }).notNull(),
-    metadataJson: text('metadata_json'), // JSON-encoded additional fields
+    metadata: text('metadata'), // JSON-encoded additional fields
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
 }, (table) => [

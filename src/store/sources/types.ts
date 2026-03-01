@@ -9,6 +9,8 @@ import type { Artist as SchemaArtist } from '../artists/types';
 import type { Album as SchemaAlbum } from '../albums/types';
 import type { Track as SchemaTrack } from '../tracks/types';
 import type { Playlist as SchemaPlaylist } from '../playlists/types';
+import { InferSelectModel } from 'drizzle-orm';
+import sources from './entity';
 
 /**
  * Source types enum
@@ -18,17 +20,7 @@ export enum SourceType {
     EMBY_V1 = 'emby.v1',
 }
 
-/**
- * Source information
- */
-export interface Source {
-    id: string;
-    uri: string;
-    userId?: string;
-    accessToken?: string;
-    deviceId?: string;
-    type: SourceType;
-}
+export type Source = InferSelectModel<typeof sources>;
 
 /**
  * Source info returned during connection
@@ -67,34 +59,52 @@ export interface ListResult<T> {
 }
 
 /**
- * Artist entity returned from drivers
- * Compatible with schema but without sourceId, timestamps
+ * Artist entity returned from drivers.
+ * sourceId, firstSyncedAt, and lastSyncedAt are omitted — they are managed
+ * locally by the schema and actions, never supplied by drivers.
+ * createdAt/updatedAt are optional — drivers provide source-side dates where available.
  */
-export type Artist = Omit<SchemaArtist, 'sourceId' | 'createdAt' | 'updatedAt'>;
+export type Artist = Omit<SchemaArtist, 'sourceId' | 'firstSyncedAt' | 'lastSyncedAt' | 'createdAt' | 'updatedAt'> & {
+    createdAt?: number;
+    updatedAt?: number;
+};
 
 /**
- * Album entity returned from drivers
- * Compatible with schema but without sourceId, timestamps
- * Includes temporary artistItems field for relationship data
+ * Album entity returned from drivers.
+ * sourceId, firstSyncedAt, and lastSyncedAt are omitted — they are managed
+ * locally by the schema and actions, never supplied by drivers.
+ * createdAt/updatedAt are optional — drivers provide source-side dates where available.
+ * Includes temporary artistItems field for relationship data.
  */
-export type Album = Omit<SchemaAlbum, 'sourceId' | 'createdAt' | 'updatedAt' | 'lastRefreshed'> & {
+export type Album = Omit<SchemaAlbum, 'sourceId' | 'firstSyncedAt' | 'lastSyncedAt' | 'createdAt' | 'updatedAt'> & {
+    createdAt?: number;
+    updatedAt?: number;
     artistItems?: Artist[];
 };
 
 /**
- * Track entity returned from drivers
- * Compatible with schema but without sourceId, timestamps
- * Includes temporary artistItems field for relationship data
+ * Track entity returned from drivers.
+ * sourceId, firstSyncedAt, lastSyncedAt, and lyrics are omitted —
+ * the sync timestamps are managed by the schema; lyrics are managed locally.
+ * createdAt/updatedAt are optional — drivers provide source-side dates where available.
+ * Includes temporary artistItems field for relationship data.
  */
-export type Track = Omit<SchemaTrack, 'sourceId' | 'createdAt' | 'updatedAt' | 'hasLyrics' | 'lyrics'> & {
+export type Track = Omit<SchemaTrack, 'sourceId' | 'firstSyncedAt' | 'lastSyncedAt' | 'lyrics' | 'createdAt' | 'updatedAt'> & {
+    createdAt?: number;
+    updatedAt?: number;
     artistItems?: Artist[];
 };
 
 /**
- * Playlist entity returned from drivers
- * Compatible with schema but without sourceId, timestamps
+ * Playlist entity returned from drivers.
+ * sourceId, firstSyncedAt, and lastSyncedAt are omitted — they are managed
+ * locally by the schema and actions, never supplied by drivers.
+ * createdAt/updatedAt are optional — drivers provide source-side dates where available.
  */
-export type Playlist = Omit<SchemaPlaylist, 'sourceId' | 'createdAt' | 'updatedAt' | 'lastRefreshed'>;
+export type Playlist = Omit<SchemaPlaylist, 'sourceId' | 'firstSyncedAt' | 'lastSyncedAt' | 'createdAt' | 'updatedAt'> & {
+    createdAt?: number;
+    updatedAt?: number;
+};
 
 /**
  * Search filter types
@@ -177,6 +187,10 @@ export abstract class SourceDriver {
 
     constructor(source: Source) {
         this.source = source;
+    }
+
+    getSourceId(): string {
+        return this.source.id;
     }
 
     /**

@@ -32,6 +32,7 @@ export interface EmbyBaseItem {
  */
 export interface EmbyArtist extends EmbyBaseItem {
     IsFolder: boolean;
+    DateCreated?: string;
 }
 
 /**
@@ -56,6 +57,7 @@ export interface EmbyTrack extends EmbyBaseItem {
     IndexNumber?: number;
     ParentIndexNumber?: number;
     RunTimeTicks?: number;
+    DateCreated?: string;
     ArtistItems?: EmbyArtist[];
 }
 
@@ -65,6 +67,7 @@ export interface EmbyTrack extends EmbyBaseItem {
 export interface EmbyPlaylist extends EmbyBaseItem {
     CanDelete: boolean;
     ChildCount?: number;
+    DateCreated?: string;
 }
 
 /**

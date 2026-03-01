@@ -134,7 +134,9 @@ export class EmbyDriver extends SourceDriver {
                 id: item.Id,
                 name: item.Name,
                 isFolder: item.IsFolder || false,
-                metadataJson: JSON.stringify(item),
+                metadata: JSON.stringify(item),
+                createdAt: item.DateCreated ? new Date(item.DateCreated).getTime() : undefined,
+                updatedAt: item.DateCreated ? new Date(item.DateCreated).getTime() : undefined,
             })),
             total: response.TotalRecordCount,
             offset,
@@ -169,16 +171,15 @@ export class EmbyDriver extends SourceDriver {
                 productionYear: item.ProductionYear ?? null,
                 isFolder: item.IsFolder || false,
                 albumArtist: item.AlbumArtist ?? null,
-                dateCreated: item.DateCreated
-                    ? new Date(item.DateCreated).getTime()
-                    : null,
-                metadataJson: JSON.stringify(item),
+                metadata: JSON.stringify(item),
+                createdAt: item.DateCreated ? new Date(item.DateCreated).getTime() : undefined,
+                updatedAt: item.DateCreated ? new Date(item.DateCreated).getTime() : undefined,
                 artistItems:
                     item.ArtistItems?.map((artist) => ({
                         id: artist.Id,
                         name: artist.Name,
                         isFolder: artist.IsFolder,
-                        metadataJson: JSON.stringify(artist),
+                        metadata: JSON.stringify(artist),
                     })) || [],
             })),
             total: response.TotalRecordCount,
@@ -201,16 +202,15 @@ export class EmbyDriver extends SourceDriver {
             productionYear: item.ProductionYear ?? null,
             isFolder: item.IsFolder || false,
             albumArtist: item.AlbumArtist ?? null,
-            dateCreated: item.DateCreated
-                ? new Date(item.DateCreated).getTime()
-                : null,
-            metadataJson: JSON.stringify(item),
+            metadata: JSON.stringify(item),
+            createdAt: item.DateCreated ? new Date(item.DateCreated).getTime() : undefined,
+            updatedAt: item.DateCreated ? new Date(item.DateCreated).getTime() : undefined,
             artistItems:
                 item.ArtistItems?.map((artist) => ({
                     id: artist.Id,
                     name: artist.Name,
                     isFolder: artist.IsFolder,
-                    metadataJson: JSON.stringify(artist),
+                    metadata: JSON.stringify(artist),
                 })) || [],
         };
     }
@@ -248,13 +248,15 @@ export class EmbyDriver extends SourceDriver {
                 indexNumber: item.IndexNumber ?? null,
                 parentIndexNumber: item.ParentIndexNumber ?? null,
                 runTimeTicks: item.RunTimeTicks ?? null,
-                metadataJson: JSON.stringify(item),
+                metadata: JSON.stringify(item),
+                createdAt: item.DateCreated ? new Date(item.DateCreated).getTime() : undefined,
+                updatedAt: item.DateCreated ? new Date(item.DateCreated).getTime() : undefined,
                 artistItems:
                     item.ArtistItems?.map((artist) => ({
                         id: artist.Id,
                         name: artist.Name,
                         isFolder: artist.IsFolder,
-                        metadataJson: JSON.stringify(artist),
+                        metadata: JSON.stringify(artist),
                     })) || [],
             })),
             total: response.TotalRecordCount,
@@ -288,7 +290,9 @@ export class EmbyDriver extends SourceDriver {
                 name: item.Name,
                 canDelete: item.CanDelete || false,
                 childCount: item.ChildCount ?? null,
-                metadataJson: JSON.stringify(item),
+                metadata: JSON.stringify(item),
+                createdAt: item.DateCreated ? new Date(item.DateCreated).getTime() : undefined,
+                updatedAt: item.DateCreated ? new Date(item.DateCreated).getTime() : undefined,
             })),
             total: response.TotalRecordCount,
             offset,
@@ -309,7 +313,9 @@ export class EmbyDriver extends SourceDriver {
             name: item.Name,
             canDelete: item.CanDelete || false,
             childCount: item.ChildCount ?? null,
-            metadataJson: JSON.stringify(item),
+            metadata: JSON.stringify(item),
+            createdAt: item.DateCreated ? new Date(item.DateCreated).getTime() : undefined,
+            updatedAt: item.DateCreated ? new Date(item.DateCreated).getTime() : undefined,
         };
     }
 
@@ -345,13 +351,15 @@ export class EmbyDriver extends SourceDriver {
                 indexNumber: item.IndexNumber ?? null,
                 parentIndexNumber: item.ParentIndexNumber ?? null,
                 runTimeTicks: item.RunTimeTicks ?? null,
-                metadataJson: JSON.stringify(item),
+                metadata: JSON.stringify(item),
+                createdAt: item.DateCreated ? new Date(item.DateCreated).getTime() : undefined,
+                updatedAt: item.DateCreated ? new Date(item.DateCreated).getTime() : undefined,
                 artistItems:
                     item.ArtistItems?.map((artist) => ({
                         id: artist.Id,
                         name: artist.Name,
                         isFolder: artist.IsFolder,
-                        metadataJson: JSON.stringify(artist),
+                        metadata: JSON.stringify(artist),
                     })) || [],
             })),
             total: response.TotalRecordCount,
@@ -448,16 +456,15 @@ export class EmbyDriver extends SourceDriver {
                 productionYear: item.ProductionYear ?? null,
                 isFolder: item.IsFolder || false,
                 albumArtist: item.AlbumArtist ?? null,
-                dateCreated: item.DateCreated
-                    ? new Date(item.DateCreated).getTime()
-                    : null,
-                metadataJson: JSON.stringify(item),
+                metadata: JSON.stringify(item),
+                createdAt: item.DateCreated ? new Date(item.DateCreated).getTime() : undefined,
+                updatedAt: item.DateCreated ? new Date(item.DateCreated).getTime() : undefined,
                 artistItems:
                     item.ArtistItems?.map((artist) => ({
                         id: artist.Id,
                         name: artist.Name,
                         isFolder: artist.IsFolder,
-                        metadataJson: JSON.stringify(artist),
+                        metadata: JSON.stringify(artist),
                     })) || [],
             })),
             total: response.TotalRecordCount,
@@ -493,16 +500,15 @@ export class EmbyDriver extends SourceDriver {
                 productionYear: item.ProductionYear ?? null,
                 isFolder: item.IsFolder || false,
                 albumArtist: item.AlbumArtist ?? null,
-                dateCreated: item.DateCreated
-                    ? new Date(item.DateCreated).getTime()
-                    : null,
-                metadataJson: JSON.stringify(item),
+                metadata: JSON.stringify(item),
+                createdAt: item.DateCreated ? new Date(item.DateCreated).getTime() : undefined,
+                updatedAt: item.DateCreated ? new Date(item.DateCreated).getTime() : undefined,
                 artistItems:
                     item.ArtistItems?.map((artist) => ({
                         id: artist.Id,
                         name: artist.Name,
                         isFolder: artist.IsFolder,
-                        metadataJson: JSON.stringify(artist),
+                        metadata: JSON.stringify(artist),
                     })) || [],
             })),
             total: response.TotalRecordCount,
@@ -539,13 +545,15 @@ export class EmbyDriver extends SourceDriver {
                 indexNumber: item.IndexNumber ?? null,
                 parentIndexNumber: item.ParentIndexNumber ?? null,
                 runTimeTicks: item.RunTimeTicks ?? null,
-                metadataJson: JSON.stringify(item),
+                metadata: JSON.stringify(item),
+                createdAt: item.DateCreated ? new Date(item.DateCreated).getTime() : undefined,
+                updatedAt: item.DateCreated ? new Date(item.DateCreated).getTime() : undefined,
                 artistItems:
                     item.ArtistItems?.map((artist) => ({
                         id: artist.Id,
                         name: artist.Name,
                         isFolder: artist.IsFolder,
-                        metadataJson: JSON.stringify(artist),
+                        metadata: JSON.stringify(artist),
                     })) || [],
             })),
             total: response.TotalRecordCount,
