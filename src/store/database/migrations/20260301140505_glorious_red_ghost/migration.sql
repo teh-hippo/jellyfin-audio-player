@@ -1,1 +1,0 @@
-ALTER TABLE `downloads` ADD `file_size` integer;

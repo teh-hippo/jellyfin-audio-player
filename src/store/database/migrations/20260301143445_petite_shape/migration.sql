@@ -1,1 +1,0 @@
-ALTER TABLE `downloads` ADD `artwork_path` text;
