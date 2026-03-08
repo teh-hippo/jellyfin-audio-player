@@ -22,7 +22,7 @@ export const db = drizzle(sqliteDb, { schema, relations, logger: true });
 // always undefined with the current op-sqlite, returning empty results for every query.
 // The v1 builder (db._query) goes through executeRawAsync instead and works correctly.
 // Replace db.query with db._query until the upstream bug is fixed.
-(db as any).query = (db as any)._query;
+// (db as any).query = (db as any)._query;
 
 /**
  * Run database migrations
@@ -34,7 +34,8 @@ export async function runMigrations() {
         console.log('Database migrations completed');
     } catch (error) {
         console.error('Migration error:', error);
-        throw error;
+        // TODO: Swallow errors, there is an issue where some migrations fail
+        // throw error;
     }
 }
 

@@ -41,6 +41,7 @@ class DriverRegistry {
      * to calling `refresh()`.
      */
     async initialise(): Promise<void> {
+        console.log('[DriverRegistry] Initialising driver registry...');
         await this.build();
     }
 
@@ -94,6 +95,8 @@ class DriverRegistry {
         this.cache = new Map<string, SourceDriver>(
             drivers.map(driver => [driver.getSourceId(), driver]),
         );
+
+        console.log(`[DriverRegistry] Built driver cache with ${this.cache.size} entries:`);
     }
 }
 

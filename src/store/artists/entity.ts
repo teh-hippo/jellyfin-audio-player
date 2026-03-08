@@ -12,8 +12,6 @@ const artists = sqliteTable('artists', {
     id: text('id').primaryKey(),
     /** Display name of the artist. */
     name: text('name').notNull(),
-    /** Whether this artist is represented as a folder on the server. */
-    isFolder: integer('is_folder', { mode: 'boolean' }).notNull(),
     /** Full source API response serialized as JSON. Preserves all fields not mapped to dedicated columns. */
     metadata: jsonColumn<unknown>('metadata'),
     /**

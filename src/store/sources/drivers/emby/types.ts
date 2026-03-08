@@ -31,7 +31,7 @@ export interface EmbyBaseItem {
  * Artist from Emby API
  */
 export interface EmbyArtist extends EmbyBaseItem {
-    IsFolder: boolean;
+    IsFolder?: boolean;
     DateCreated?: string;
 }
 

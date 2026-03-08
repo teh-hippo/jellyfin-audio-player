@@ -31,7 +31,7 @@ export interface JellyfinBaseItem {
  * Artist from Jellyfin API
  */
 export interface JellyfinArtist extends JellyfinBaseItem {
-    IsFolder: boolean;
+    IsFolder?: boolean;
     DateCreated?: string;
 }
 

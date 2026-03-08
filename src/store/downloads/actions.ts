@@ -1,16 +1,17 @@
 import { db, sqliteDb } from '@/store';
 import { and, eq } from 'drizzle-orm';
 import downloads from './entity';
+
 import type { EntityId } from '@/store/types';
 
 export async function getAllDownloads() {
-    return db.query.downloads.findMany();
+    return db.select().from(downloads).all();
 }
 
 export async function getDownload([sourceId, id]: EntityId) {
-    return db.query.downloads.findFirst({
-        where: { sourceId, id },
-    });
+    return db.select().from(downloads)
+        .where(and(eq(downloads.sourceId, sourceId), eq(downloads.id, id)))
+        .get();
 }
 
 export interface InitialiseDownloadParams {

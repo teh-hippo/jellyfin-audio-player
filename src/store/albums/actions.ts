@@ -26,7 +26,6 @@ export async function upsertAlbum(album: UpsertAlbum): Promise<void> {
             sourceId: album.sourceId,
             name: album.name,
             productionYear: album.productionYear,
-            isFolder: album.isFolder,
             albumArtist: album.albumArtist,
             metadata: album.metadata,
             // Use the server-provided timestamps when available, otherwise null.

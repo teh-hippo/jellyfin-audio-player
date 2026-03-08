@@ -68,7 +68,6 @@ const RecentAlbums: React.FC = () => {
     // Initialise helpers
     const navigation = useNavigation<NavigationProp>();
 
-
     // Set callbacks
     const [isLoading, retrieveData] = useSyncAction(() => Sync.syncAlbums());
 

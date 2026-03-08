@@ -25,7 +25,6 @@ export async function upsertArtist(artist: UpsertArtist): Promise<void> {
         set: {
             sourceId: artist.sourceId,
             name: artist.name,
-            isFolder: artist.isFolder,
             metadata: artist.metadata,
             // Use the source-provided dates as-is; null if the source omits them.
             createdAt: artist.createdAt,
@@ -33,7 +32,7 @@ export async function upsertArtist(artist: UpsertArtist): Promise<void> {
             // firstSyncedAt is intentionally excluded — preserve the original insert value.
             // lastSyncedAt is handled automatically by $onUpdateFn.
         },
-    });
+    }).catch(console.error);
 
     sqliteDb.flushPendingReactiveQueries();
 }

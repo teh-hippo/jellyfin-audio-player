@@ -14,8 +14,6 @@ const albums = sqliteTable('albums', {
     name: text('name').notNull(),
     /** Release year as reported by the server, if available. */
     productionYear: integer('production_year'),
-    /** Whether this album is a folder-type item rather than a true album. */
-    isFolder: integer('is_folder', { mode: 'boolean' }).notNull(),
     /** Primary album artist name as reported by the server, if available. */
     albumArtist: text('album_artist'),
     /** Full source API response serialised as JSON, for fields not mapped to dedicated columns. */

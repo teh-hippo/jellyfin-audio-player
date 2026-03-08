@@ -73,8 +73,8 @@ export class SourceSync {
         this.queue = new PQueue({ concurrency });
         this.pending = new Map();
 
-        this.queue.on('next', () => {
-            console.log('[SYNC] Starting next task. Queue size:', this.queue.size);
+        this.queue.on('active', () => {
+            console.log('[SYNC] Starting next task. Queue size:', this.queue.size, 'Pending promises:', this.pending.size);
         })
     }
 
@@ -100,7 +100,9 @@ export class SourceSync {
 
     /** Sync all albums from one source, or all sources if omitted. */
     async syncAlbums(sourceId?: string): Promise<void> {
+        console.log('[SYNC] Enqueueing albums sync for sourceId:', sourceId ?? 'ALL');
         await this.registerCursor(sourceId, EntityType.ALBUMS);
+        console.log('[SYNC] Albums sync enqueued for sourceId:', sourceId ?? 'ALL');
     }
 
     /** Sync all tracks belonging to the given album. */
@@ -155,12 +157,28 @@ export class SourceSync {
             ? [sourceId]
             : [...driverRegistry.getAll().keys()];
 
+        console.log(`[SYNC] Registering cursor for entityType: ${entityType}, parentEntityId: ${parentEntityId}, parentEntityType: ${parentEntityType}, sourceIds: ${sourceIds.join(', ')}`);
+        console.log(driverRegistry, driverRegistry.getAll());
+
         // Persist a cursor row for each target source so the work survives a
         // restart, then collect the completion promise for each one.
         const promises = await Promise.all(
             sourceIds.map(async (id) => {
-                await createCursorIfNotExists(id, entityType, parentEntityId, parentEntityType);
-                return this.getOrCreatePromise(id, entityType, parentEntityId).promise;
+                // Create the cursor first
+                const cursor = await createCursorIfNotExists(id, entityType, parentEntityId, parentEntityType);
+                console.log('[SYNC] Cursor registered:', cursor);
+
+                if (!cursor) {
+                    throw new Error(`Failed to create cursor for sourceId: ${id}, entityType: ${entityType}, parentEntityId: ${parentEntityId}, parentEntityType: ${parentEntityType}`);
+                }
+
+                // Then, create a promise we can return to the caller
+                const promise = this.getOrCreatePromise(id, entityType, parentEntityId).promise;
+
+                // Finally, add the task to the queue.
+                this.queue.add(() => this.executeTask(cursor));
+
+                return promise;
             })
         );
 
@@ -253,6 +271,7 @@ export class SourceSync {
     // -------------------------------------------------------------------------
 
     private async executeTask(cursor: SyncCursor): Promise<void> {
+        console.log('[SYNC] Executing task for cursor', cursor);
         // A cursor without a matching driver has nowhere to fetch from — skip it.
         const driver = driverRegistry.getById(cursor.sourceId);
         if (!driver) return;

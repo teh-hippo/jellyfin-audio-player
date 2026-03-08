@@ -2,7 +2,7 @@ import { db, sqliteDb } from "..";
 import getDriverBySource from "./drivers";
 import { SourceType, SourceCredentials } from "./types";
 import sources from "./entity";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import { driverRegistry } from "./drivers/registry";
 
@@ -12,7 +12,7 @@ type Source = InferSelectModel<typeof sources>;
  * Retrieve all sources from the database
  */
 export async function getSources() {
-    return db.query.sources.findMany();
+    return db.select().from(sources).all();
 }
 
 /**
@@ -39,12 +39,10 @@ export async function getAllSourceDrivers() {
  * inserting a new row, without relying on the primary key.
  */
 export async function getSourceByServer(uri: string, userId: string): Promise<Source | undefined> {
-    return db.query.sources.findFirst({
-        where: {
-            uri,
-            userId,
-        },
-    });
+    return db.select().from(sources).where(and(
+        eq(sources.uri, uri),
+        eq(sources.userId, userId),
+    )).get();
 }
 
 /**

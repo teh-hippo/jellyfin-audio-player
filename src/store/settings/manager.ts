@@ -124,7 +124,7 @@ class SettingsManager {
      * mutated the `settings` row outside of this manager.
      */
     async refresh(): Promise<void> {
-        const row = await db.query.settings.findFirst({ where: { id: 1 } });
+        const row = await db.select().from(settingsEntity).where(eq(settingsEntity.id, 1)).get();
         if (row) {
             this.cache = row;
         }
@@ -168,7 +168,7 @@ class SettingsManager {
      * in-flight promise so future reads hit the cache path directly.
      */
     private async build(): Promise<AppSettings> {
-        let row = await db.query.settings.findFirst({ where: { id: 1 } }) ?? null;
+        let row = await db.select().from(settingsEntity).where(eq(settingsEntity.id, 1)).get() ?? null;
 
         if (row === null) {
             await db.insert(settingsEntity).values(DEFAULT_SETTINGS);
@@ -176,7 +176,7 @@ class SettingsManager {
 
             // Re-read so the cache always holds a genuine database row rather
             // than the bare insert object (e.g. to capture any DB-level defaults).
-            row = (await db.query.settings.findFirst({ where: { id: 1 } }))!;
+            row = (await db.select().from(settingsEntity).where(eq(settingsEntity.id, 1)).get())!;
         }
 
         this.cache = row;

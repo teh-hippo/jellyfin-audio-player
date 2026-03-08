@@ -134,7 +134,6 @@ export class JellyfinDriver extends SourceDriver {
             items: response.Items.map(item => ({
                 id: item.Id,
                 name: item.Name,
-                isFolder: item.IsFolder || false,
                 metadata: item,
                 createdAt: item.DateCreated ? new Date(item.DateCreated).getTime() : undefined,
                 updatedAt: item.DateCreated ? new Date(item.DateCreated).getTime() : undefined,
@@ -170,7 +169,6 @@ export class JellyfinDriver extends SourceDriver {
                 id: item.Id,
                 name: item.Name,
                 productionYear: item.ProductionYear ?? null,
-                isFolder: item.IsFolder || false,
                 albumArtist: item.AlbumArtist ?? null,
                 metadata: item,
                 createdAt: item.DateCreated ? new Date(item.DateCreated).getTime() : undefined,
@@ -178,7 +176,6 @@ export class JellyfinDriver extends SourceDriver {
                 artistItems: item.ArtistItems?.map(artist => ({
                     id: artist.Id,
                     name: artist.Name,
-                    isFolder: artist.IsFolder,
                     metadata: artist,
                 })) || [],
             })),
@@ -200,7 +197,6 @@ export class JellyfinDriver extends SourceDriver {
             id: item.Id,
             name: item.Name,
             productionYear: item.ProductionYear ?? null,
-            isFolder: item.IsFolder || false,
             albumArtist: item.AlbumArtist ?? null,
             metadata: item,
             createdAt: item.DateCreated ? new Date(item.DateCreated).getTime() : undefined,
@@ -208,7 +204,6 @@ export class JellyfinDriver extends SourceDriver {
             artistItems: item.ArtistItems?.map(artist => ({
                 id: artist.Id,
                 name: artist.Name,
-                isFolder: artist.IsFolder,
                 metadata: artist,
             })) || [],
         };
@@ -250,7 +245,6 @@ export class JellyfinDriver extends SourceDriver {
                 artistItems: item.ArtistItems?.map(artist => ({
                     id: artist.Id,
                     name: artist.Name,
-                    isFolder: artist.IsFolder,
                     metadata: artist,
                 })) || [],
             })),
@@ -349,7 +343,6 @@ export class JellyfinDriver extends SourceDriver {
                 artistItems: item.ArtistItems?.map(artist => ({
                     id: artist.Id,
                     name: artist.Name,
-                    isFolder: artist.IsFolder,
                     metadata: artist,
                 })) || [],
             })),
@@ -422,7 +415,6 @@ export class JellyfinDriver extends SourceDriver {
                 id: item.Id,
                 name: item.Name,
                 productionYear: item.ProductionYear ?? null,
-                isFolder: item.IsFolder || false,
                 albumArtist: item.AlbumArtist ?? null,
                 metadata: item,
                 createdAt: item.DateCreated ? new Date(item.DateCreated).getTime() : undefined,
@@ -430,7 +422,6 @@ export class JellyfinDriver extends SourceDriver {
                 artistItems: item.ArtistItems?.map(artist => ({
                     id: artist.Id,
                     name: artist.Name,
-                    isFolder: artist.IsFolder,
                     metadata: artist,
                 })) || [],
             })),
@@ -462,7 +453,6 @@ export class JellyfinDriver extends SourceDriver {
                 id: item.Id,
                 name: item.Name,
                 productionYear: item.ProductionYear ?? null,
-                isFolder: item.IsFolder || false,
                 albumArtist: item.AlbumArtist ?? null,
                 metadata: item,
                 createdAt: item.DateCreated ? new Date(item.DateCreated).getTime() : undefined,
@@ -470,7 +460,6 @@ export class JellyfinDriver extends SourceDriver {
                 artistItems: item.ArtistItems?.map(artist => ({
                     id: artist.Id,
                     name: artist.Name,
-                    isFolder: artist.IsFolder,
                     metadata: artist,
                 })) || [],
             })),
@@ -514,7 +503,6 @@ export class JellyfinDriver extends SourceDriver {
                 artistItems: item.ArtistItems?.map(artist => ({
                     id: artist.Id,
                     name: artist.Name,
-                    isFolder: artist.IsFolder,
                     metadata: artist,
                 })) || [],
             })),
