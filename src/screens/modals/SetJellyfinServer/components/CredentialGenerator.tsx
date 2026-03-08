@@ -1,7 +1,8 @@
 import React, { useRef, useCallback, memo } from 'react';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
-import { debounce } from 'lodash';
 import { SourceType, SourceCredentials } from '@/store/sources/types';
+import { useMemo } from 'react';
+import { debounce } from 'lodash';
 
 interface Props {
     serverUrl: string;
@@ -52,7 +53,7 @@ type CredentialEventData = {
 const CredentialGenerator: React.FC<Props> = ({ serverUrl, onCredentialsRetrieved }) => {
     const webViewRef = useRef<WebView>(null);
 
-    const checkIfCredentialsAreThere = useCallback(() => {
+    const checkIfCredentialsAreThere = useMemo(() => debounce(() =>{
         console.log('Checking for credentials in WebView localStorage...');
         webViewRef.current?.injectJavaScript(`
             try {
@@ -66,7 +67,7 @@ const CredentialGenerator: React.FC<Props> = ({ serverUrl, onCredentialsRetrieve
                 window.ReactNativeWebView.postMessage(JSON.stringify({ credentials, deviceId, type: 'emby.v1' }))
             } catch(e) { }; true;
         `);
-    }, []);
+    }, 500), []);
 
     const handleMessage = useCallback(async (event: WebViewMessageEvent) => {
         // GUARD: Something must be returned for this thing to work
@@ -149,8 +150,7 @@ const CredentialGenerator: React.FC<Props> = ({ serverUrl, onCredentialsRetrieve
     return (
         <WebView
             source={{ uri: serverUrl as string }}
-            onLoadEnd={() => checkIfCredentialsAreThere}
-            // onLoadEnd={console.log}
+            onNavigationStateChange={checkIfCredentialsAreThere}
             onError={console.error}
             onMessage={handleMessage}
             ref={webViewRef}

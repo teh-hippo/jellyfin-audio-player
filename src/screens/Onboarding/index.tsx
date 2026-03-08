@@ -10,6 +10,7 @@ import { ShadowWrapper } from '@/components/Shadow';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLiveQuery } from '@/store/live-queries';
 import { db } from '@/store';
+import { getSources } from '@/store/sources/actions';
 import sources from '@/store/sources/entity';
 
 const Container = styled(SafeAreaView)`
@@ -41,7 +42,7 @@ const Logo = styled.Image`
 
 function Onboarding() {
     // Get account from database
-    const { data: sourceData } = useLiveQuery(() => db.query.sources.findMany());
+    const { data: sourceData } = useLiveQuery(() => db.select().from(sources));
     const account = sourceData?.[0];
 
     // Also retrieve the navigation handler so that we can open the modal in
