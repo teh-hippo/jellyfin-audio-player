@@ -12,7 +12,7 @@ type Source = InferSelectModel<typeof sources>;
  * Retrieve all sources from the database
  */
 export async function getSources() {
-    return db.select().from(sources).all();
+    return db.query.sources.findMany();
 }
 
 /**

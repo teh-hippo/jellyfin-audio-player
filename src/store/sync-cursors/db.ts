@@ -15,8 +15,6 @@ export async function createCursorIfNotExists(
     parentEntityType?: string,
     pageSize: number = 500,
 ) {
-    console.log('Creating cursor', { sourceId, entityType, parentEntityId, parentEntityType });
-
     await db.insert(syncCursors).values({
         sourceId,
         entityType,
@@ -29,16 +27,14 @@ export async function createCursorIfNotExists(
 
     await sqliteDb.flushPendingReactiveQueries();
 
-    console.log('Inserted cursor');
-
-    const cursor = await db.select().from(syncCursors).where(and(
-        eq(syncCursors.sourceId, sourceId),
-        eq(syncCursors.entityType, entityType),
-        parentEntityId !== undefined ? eq(syncCursors.parentEntityId, parentEntityId) : isNull(syncCursors.parentEntityId),
-        parentEntityType !== undefined ? eq(syncCursors.parentEntityType, parentEntityType) : isNull(syncCursors.parentEntityType),
-    )).get();
-
-    console.log('Retrieved cursor', cursor);
+    const cursor = await db.query.syncCursors.findFirst({
+        where: {
+            sourceId,
+            entityType,
+            parentEntityId: parentEntityId,
+            parentEntityType: parentEntityType,
+        }
+    })
 
     return cursor;
 }
