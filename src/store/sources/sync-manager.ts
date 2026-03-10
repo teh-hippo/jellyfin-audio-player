@@ -8,6 +8,7 @@ import {
     createCursorIfNotExists,
     updateCursorOffset,
     markCursorComplete,
+    isRecentlyCompleted,
 } from '../sync-cursors/db';
 import { upsertArtists } from '../artists/actions';
 import { upsertAlbums } from '../albums/actions';
@@ -19,6 +20,7 @@ import { upsertAlbumSimilar } from '../album-similar/db';
 import { setPlaylistTracks } from '../playlist-tracks/db';
 import { updateTrackLyrics } from '../tracks/db';
 import { driverRegistry } from './drivers/registry';
+import { throttle } from 'lodash';
 
 // How many items to request per API call. Large enough to minimise round-trips,
 // small enough to keep individual tasks short and resumable.
@@ -69,13 +71,13 @@ export class SourceSync {
      */
     private pending: Map<string, DeferredPromise>;
 
-    constructor(concurrency = 5) {
+    constructor(concurrency = 10) {
         this.queue = new PQueue({ concurrency });
         this.pending = new Map();
 
-        this.queue.on('active', () => {
+        this.queue.on('active', throttle(() => {
             console.log('[SYNC] Starting next task. Queue size:', this.queue.size, 'Pending promises:', this.pending.size);
-        })
+        }, 1000));
     }
 
     // -------------------------------------------------------------------------
@@ -100,9 +102,7 @@ export class SourceSync {
 
     /** Sync all albums from one source, or all sources if omitted. */
     async syncAlbums(sourceId?: string): Promise<void> {
-        console.log('[SYNC] Enqueueing albums sync for sourceId:', sourceId ?? 'ALL');
         await this.registerCursor(sourceId, EntityType.ALBUMS);
-        console.log('[SYNC] Albums sync enqueued for sourceId:', sourceId ?? 'ALL');
     }
 
     /** Sync all tracks belonging to the given album. */
@@ -135,9 +135,9 @@ export class SourceSync {
     // -------------------------------------------------------------------------
 
     /**
-     * Creates a sync cursor in the database (if one doesn't already exist) and
-     * registers a completion promise for it in a single step. Returns a promise
-     * that resolves when all targeted cursors have completed execution.
+     * Creates a sync cursor in the database (if one doesn't already exist),
+     * wires up a completion promise, and adds the task to the queue. Returns a
+     * promise that resolves when all targeted cursors have completed execution.
      *
      * When sourceId is omitted the cursor is registered for every known source
      * simultaneously, and the returned promise resolves once all of them finish.
@@ -157,27 +157,28 @@ export class SourceSync {
             ? [sourceId]
             : [...driverRegistry.getAll().keys()];
 
-        console.log(`[SYNC] Registering cursor for entityType: ${entityType}, parentEntityId: ${parentEntityId}, parentEntityType: ${parentEntityType}, sourceIds: ${sourceIds.join(', ')}`);
-        console.log(driverRegistry, driverRegistry.getAll());
 
         // Persist a cursor row for each target source so the work survives a
         // restart, then collect the completion promise for each one.
         const promises = await Promise.all(
             sourceIds.map(async (id) => {
-                // Create the cursor first
                 const cursor = await createCursorIfNotExists(id, entityType, parentEntityId, parentEntityType);
-                console.log('[SYNC] Cursor registered:', cursor);
 
                 if (!cursor) {
                     throw new Error(`Failed to create cursor for sourceId: ${id}, entityType: ${entityType}, parentEntityId: ${parentEntityId}, parentEntityType: ${parentEntityType}`);
                 }
 
-                // Then, create a promise we can return to the caller
+                // If the cursor was completed recently (within the last 60 seconds),
+                // resolve immediately — there is nothing left to execute.
+                if (isRecentlyCompleted(cursor)) {
+                    this.resolvePromise(id, entityType, parentEntityId);
+                    return Promise.resolve();
+                }
+
+                // Wire up the completion promise before adding to the queue so the
+                // resolve handle exists by the time executeTask finishes.
                 const promise = this.getOrCreatePromise(id, entityType, parentEntityId).promise;
-
-                // Finally, add the task to the queue.
                 this.queue.add(() => this.executeTask(cursor));
-
                 return promise;
             })
         );
@@ -271,7 +272,14 @@ export class SourceSync {
     // -------------------------------------------------------------------------
 
     private async executeTask(cursor: SyncCursor): Promise<void> {
-        console.log('[SYNC] Executing task for cursor', cursor);
+        // Guard against stale queue entries: if this cursor was completed recently
+        // (e.g. queued twice via run() and registerCursor), resolve its promise and
+        // bail out without re-fetching anything.
+        if (isRecentlyCompleted(cursor)) {
+            this.resolvePromise(cursor.sourceId, cursor.entityType as EntityType, cursor.parentEntityId ?? '');
+            return;
+        }
+
         // A cursor without a matching driver has nowhere to fetch from — skip it.
         const driver = driverRegistry.getById(cursor.sourceId);
         if (!driver) return;
@@ -384,11 +392,9 @@ export class SourceSync {
         }
 
         // For each album, register child cursors for its tracks and similar albums.
-        // These are written to the database now but executed in the next run() iteration,
-        // after all album pages have landed — ensuring albums exist before their children run.
         for (const album of result.items) {
-            await this.syncAlbumTracks([sourceId, album.id]);
-            await this.syncSimilarAlbums([sourceId, album.id]);
+            this.syncAlbumTracks([sourceId, album.id]);
+            // this.syncSimilarAlbums([sourceId, album.id]);
         }
 
         const newOffset = offset + result.items.length;
@@ -434,9 +440,10 @@ export class SourceSync {
             if (track.artistItems?.length) {
                 await upsertTrackArtists([sourceId, track.id], track.artistItems);
             }
-            // Queue a lyrics fetch for every track. Lyrics are a separate network
-            // call and will be picked up by the next run() iteration.
-            await this.syncLyrics([sourceId, track.id]);
+            // Queue a lyrics fetch for every track
+            if (track.metadata?.HasLyrics) {
+                this.syncLyrics([sourceId, track.id]);
+            }
         }
 
         const newOffset = offset + result.items.length;
@@ -466,10 +473,11 @@ export class SourceSync {
             sourceId,
         })));
 
-        // For each playlist, register a child cursor to fetch its tracks. These
-        // will be picked up in the next run() iteration once all playlist pages are done.
+        // For each playlist, register a child cursor to fetch its tracks. Do not
+        // await — awaiting child completion from inside a task slot would deadlock
+        // the queue.
         for (const playlist of result.items) {
-            await this.syncPlaylistTracks([sourceId, playlist.id]);
+            this.syncPlaylistTracks([sourceId, playlist.id]);
         }
 
         const newOffset = offset + result.items.length;
@@ -525,8 +533,10 @@ export class SourceSync {
                 if (track.artistItems?.length) {
                     await upsertTrackArtists([sourceId, track.id], track.artistItems);
                 }
-                // Queue a lyrics fetch for this track, to be executed in the next iteration.
-                await this.syncLyrics([sourceId, track.id]);
+                // Queue a lyrics fetch for this track
+                if (track.metadata?.HasLyrics) {
+                    this.syncLyrics([sourceId, track.id]);
+                }
                 trackIds.push(track.id);
             }
 

@@ -15,7 +15,7 @@ export const sqliteDb = open({
 console.log('[DB] Database path:', sqliteDb.getDbPath());
 
 // Create drizzle instance with v2 relations — exported as singleton
-export const db = drizzle(sqliteDb, { schema, relations, logger: true });
+export const db = drizzle(sqliteDb, { schema, relations });
 
 /**
  * Run database migrations

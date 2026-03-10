@@ -17,7 +17,7 @@ const syncCursors = sqliteTable('sync_cursors', {
     attempts: integer('attempts').notNull().default(0),
     failedAt: integer('failed_at'),
     lastError: text('last_error'),
-    updatedAt: integer('updated_at').notNull().$default(() => Date.now()),
+    updatedAt: integer('updated_at').notNull().$default(() => Date.now()).$onUpdate(() => Date.now()),
 }, (table) => [
     primaryKey({ columns: [table.sourceId, table.entityType, table.parentEntityId] }),
 ]);

@@ -4,6 +4,8 @@ import { and, eq, isNull } from 'drizzle-orm';
 import syncCursors from './entity';
 import { EntityType, type SyncCursor } from './types';
 
+const COMPLETED_TTL_MS = 60_000;
+
 export async function getIncompleteCursors(): Promise<SyncCursor[]> {
     return db.select().from(syncCursors).where(eq(syncCursors.completed, false)).all();
 }
@@ -23,7 +25,14 @@ export async function createCursorIfNotExists(
         startIndex: 0,
         pageSize,
         completed: false,
-    }).onConflictDoNothing();
+    }).onConflictDoUpdate({
+        target: [syncCursors.sourceId, syncCursors.entityType, syncCursors.parentEntityId],
+        set: {
+            completed: false,
+            startIndex: 0,
+            updatedAt: Date.now(),
+        },
+    });
 
     await sqliteDb.flushPendingReactiveQueries();
 
@@ -34,7 +43,7 @@ export async function createCursorIfNotExists(
             parentEntityId: parentEntityId,
             parentEntityType: parentEntityType,
         }
-    })
+    });
 
     return cursor;
 }
@@ -46,7 +55,7 @@ export async function updateCursorOffset(
     parentEntityId?: string,
 ): Promise<void> {
     await db.update(syncCursors)
-        .set({ startIndex: newOffset, updatedAt: Date.now() })
+        .set({ startIndex: newOffset })
         .where(and(
             eq(syncCursors.sourceId, sourceId),
             eq(syncCursors.entityType, entityType),
@@ -60,10 +69,21 @@ export async function markCursorComplete(
     parentEntityId?: string,
 ): Promise<void> {
     await db.update(syncCursors)
-        .set({ completed: true, updatedAt: Date.now() })
+        .set({ completed: true })
         .where(and(
             eq(syncCursors.sourceId, sourceId),
             eq(syncCursors.entityType, entityType),
             parentEntityId !== undefined ? eq(syncCursors.parentEntityId, parentEntityId) : isNull(syncCursors.parentEntityId),
         ));
+}
+
+/**
+ * Returns true if the cursor was completed within the last COMPLETED_TTL_MS
+ * milliseconds. Use this instead of checking cursor.completed directly — the
+ * completed flag is reset to false by createCursorIfNotExists on each new sync
+ * cycle, so a stale completed=true from a previous run should not be treated as
+ * done.
+ */
+export function isRecentlyCompleted(cursor: SyncCursor): boolean {
+    return cursor.completed && (Date.now() - cursor.updatedAt) < COMPLETED_TTL_MS;
 }

@@ -82,10 +82,6 @@ export class JellyfinDriver extends SourceDriver {
             },
         });
 
-        if (__DEV__) {
-            console.log(`%c[HTTP] → [${response.status}] ${url}`, 'font-weight:bold;');
-        }
-
         if (!response.ok) {
             if (response.status === 403 || response.status === 401) {
                 throw new Error('AuthenticationFailed');

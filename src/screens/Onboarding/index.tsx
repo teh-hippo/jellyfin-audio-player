@@ -10,7 +10,6 @@ import { ShadowWrapper } from '@/components/Shadow';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLiveQuery } from '@/store/live-queries';
 import { db } from '@/store';
-import { getSources } from '@/store/sources/actions';
 import sources from '@/store/sources/entity';
 
 const Container = styled(SafeAreaView)`
