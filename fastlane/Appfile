@@ -1,5 +1,5 @@
-package_name("nl.moeilijkedingen.jellyfinaudioplayer")
-app_identifier("nl.moeilijkedingen.jellyfinaudioplayer")
+package_name("io.tehhippo.fintunes")
+app_identifier("io.tehhippo.fintunes")
 apple_id("lei@codified.nl")
 team_id("HD2D35G9Y4")
 json_key_file("./fastlane/play-store-credentials.json")

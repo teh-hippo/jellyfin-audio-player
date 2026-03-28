@@ -424,10 +424,10 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = nl.moeilijkedingen.jellyfinaudioplayer;
+				PRODUCT_BUNDLE_IDENTIFIER = io.tehhippo.fintunes;
 				PRODUCT_NAME = Fintunes;
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "nl.moeilijkedingen.jellyfinaudioplayer AppStore 17";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "io.tehhippo.fintunes AppStore 17";
 				SWIFT_OBJC_BRIDGING_HEADER = "Fintunes-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -460,11 +460,11 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = nl.moeilijkedingen.jellyfinaudioplayer;
+				PRODUCT_BUNDLE_IDENTIFIER = io.tehhippo.fintunes;
 				PRODUCT_NAME = Fintunes;
 				PROVISIONING_PROFILE = "915c5213-22f6-4f9d-8065-2a06300f9bfb";
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "nl.moeilijkedingen.jellyfinaudioplayer AppStore 17";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "io.tehhippo.fintunes AppStore 17";
 				SWIFT_OBJC_BRIDGING_HEADER = "Fintunes-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
