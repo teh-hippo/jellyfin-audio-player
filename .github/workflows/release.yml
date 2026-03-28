@@ -17,11 +17,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Pin Xcode 16.2 to avoid Swift 6 strict concurrency in 16.4
-      - uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: '16.2'
-
       # Node + pnpm
       - uses: pnpm/action-setup@v4
         with:
