@@ -1,0 +1,133 @@
+name: Release to TestFlight
+
+# Runs when a GitHub Release is published, or manually.
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+jobs:
+  build-and-upload:
+    name: Build & Upload to TestFlight
+    runs-on: macos-15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Node + pnpm
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+      - run: pnpm install
+
+      # Ruby (for CocoaPods)
+      - uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      # CocoaPods
+      - name: Install CocoaPods dependencies
+        run: cd ios && pod install
+
+      # Import distribution certificate into macOS keychain
+      - name: Import signing certificate
+        env:
+          P12_BASE64: ${{ secrets.APPLE_DISTRIBUTION_P12 }}
+          P12_PASSWORD: ${{ secrets.APPLE_P12_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -hex 16)
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          echo "$P12_BASE64" | base64 --decode > $RUNNER_TEMP/cert.p12
+          security import $RUNNER_TEMP/cert.p12 \
+            -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+
+          security set-key-partition-list -S apple-tool:,apple: \
+            -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+      # Install provisioning profile
+      - name: Install provisioning profile
+        env:
+          PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
+          PROFILE_UUID: ${{ secrets.APPLE_PROVISIONING_PROFILE_UUID }}
+        run: |
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          echo "$PROFILE_BASE64" | base64 --decode \
+            > ~/Library/MobileDevice/Provisioning\ Profiles/${PROFILE_UUID}.mobileprovision
+
+      # Write the API key for upload
+      - name: Install App Store Connect API key
+        env:
+          API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+        run: |
+          mkdir -p ~/private_keys
+          echo "$API_KEY" > ~/private_keys/AuthKey_${KEY_ID}.p8
+
+      # Build number from git commit count (auto-incrementing)
+      - name: Set build number
+        run: |
+          BUILD_NUMBER=$(git rev-list --count HEAD)
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_ENV
+
+      # Build JS bundle
+      - name: Bundle JS
+        run: pnpm build:ios
+
+      # Build IPA using xcodebuild
+      - name: Build IPA
+        env:
+          SENTRY_DISABLE_AUTO_UPLOAD: true
+        run: |
+          cd ios
+          xcodebuild archive \
+            -workspace Fintunes.xcworkspace \
+            -scheme Fintunes \
+            -configuration Release \
+            -archivePath $RUNNER_TEMP/Fintunes.xcarchive \
+            -destination 'generic/platform=iOS' \
+            CURRENT_PROJECT_VERSION=${{ env.BUILD_NUMBER }} \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            PROVISIONING_PROFILE_SPECIFIER="Fintunes - App Store" \
+            DEVELOPMENT_TEAM=85JR4Y4DM6
+          xcodebuild -exportArchive \
+            -archivePath $RUNNER_TEMP/Fintunes.xcarchive \
+            -exportPath $RUNNER_TEMP/export \
+            -exportOptionsPlist ExportOptions.plist
+
+      # Upload to App Store Connect (TestFlight)
+      - name: Upload to TestFlight
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          xcrun altool --upload-app \
+            --type ios \
+            --file $RUNNER_TEMP/export/*.ipa \
+            --apiKey "$KEY_ID" \
+            --apiIssuer "$ISSUER_ID"
+
+      # Tag the commit with the build number for traceability
+      - name: Tag release
+        run: |
+          git tag "build/${{ env.BUILD_NUMBER }}"
+          git push origin "build/${{ env.BUILD_NUMBER }}"
+
+      # Clean up keychain
+      - name: Clean up
+        if: always()
+        run: |
+          security delete-keychain $RUNNER_TEMP/app-signing.keychain-db 2>/dev/null || true
