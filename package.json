@@ -37,7 +37,7 @@
     "p-queue": "^9.1.0",
     "react": "19.2.3",
     "react-airplay": "1.2.0",
-    "react-native": "^0.83.1",
+    "react-native": "^0.83.9",
     "react-native-accessibility-settings": "0.1.2",
     "react-native-collapsible": "1.6.2",
     "react-native-dotenv": "3.4.11",
