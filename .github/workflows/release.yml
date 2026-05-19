@@ -7,7 +7,9 @@ on:
 
 concurrency:
   group: release
-  cancel-in-progress: true
+  # Releases shouldn't cancel each other mid-upload — a half-uploaded build
+  # leaves TestFlight in a bad state. Better to queue.
+  cancel-in-progress: false
 
 env:
   FASTLANE_SKIP_UPDATE_CHECK: true
@@ -53,7 +55,9 @@ jobs:
             ${{ runner.os }}-pods-
 
       - name: Install CocoaPods dependencies
-        run: cd ios && pod install
+        # bundle exec to use the CocoaPods version pinned in Gemfile.lock
+        # rather than whatever's globally installed on the runner.
+        run: cd ios && bundle exec pod install
 
       - name: Cache Xcode DerivedData
         uses: actions/cache@v4
@@ -103,7 +107,10 @@ jobs:
         env:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+          # Named *_CONTENT to avoid colliding with fastlane's own
+          # APP_STORE_CONNECT_API_KEY env (which it uses for the JSON hash,
+          # not raw p8 text). Fastfile reads APP_STORE_CONNECT_API_KEY_CONTENT.
+          APP_STORE_CONNECT_API_KEY_CONTENT: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_PROVISIONING_PROFILE_UUID: ${{ secrets.APPLE_PROVISIONING_PROFILE_UUID }}
         run: bundle exec fastlane ios teh_hippo_beta

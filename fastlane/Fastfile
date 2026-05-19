@@ -15,13 +15,18 @@ package = load_json(json_path: "package.json")
 platform :ios do
     lane :teh_hippo_beta do
         # ASC API key from env (no .p8 file written to disk).
-        app_store_connect_api_key(
+        # Env var named *_CONTENT to avoid colliding with fastlane's own
+        # APP_STORE_CONNECT_API_KEY (which it uses for a hash payload, not raw p8).
+        asc_api_key = app_store_connect_api_key(
             key_id: ENV.fetch("APP_STORE_CONNECT_KEY_ID"),
             issuer_id: ENV.fetch("APP_STORE_CONNECT_ISSUER_ID"),
-            key_content: ENV.fetch("APP_STORE_CONNECT_API_KEY")
+            key_content: ENV.fetch("APP_STORE_CONNECT_API_KEY_CONTENT")
         )
 
         # Manual signing tied to the pre-imported cert + profile.
+        # Setting `profile_name` (not `profile_uuid`) writes
+        # PROVISIONING_PROFILE_SPECIFIER, which takes precedence in modern
+        # Xcode. We also pass profile_uuid so PROVISIONING_PROFILE is coherent.
         update_code_signing_settings(
             use_automatic_signing: false,
             targets: ["Fintunes"],
@@ -30,6 +35,7 @@ platform :ios do
             team_id: ENV.fetch("APPLE_TEAM_ID"),
             bundle_identifier: "io.tehhippo.fintunes",
             code_sign_identity: "Apple Distribution",
+            profile_name: "Fintunes - App Store",
             profile_uuid: ENV.fetch("APPLE_PROVISIONING_PROFILE_UUID")
         )
 
@@ -41,6 +47,7 @@ platform :ios do
         # Build number must beat TestFlight's existing builds for the same
         # version (upstream has shipped 2.5.0 builds up to 1119 historically).
         next_build = latest_testflight_build_number(
+            api_key: asc_api_key,
             version: package["version"],
             app_identifier: "io.tehhippo.fintunes",
             initial_build_number: 0
@@ -63,6 +70,7 @@ platform :ios do
         )
 
         upload_to_testflight(
+            api_key: asc_api_key,
             uses_non_exempt_encryption: false,
             skip_waiting_for_build_processing: true
         )
