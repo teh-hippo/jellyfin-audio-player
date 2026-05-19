@@ -1,6 +1,4 @@
-package_name("nl.moeilijkedingen.jellyfinaudioplayer")
-app_identifier("nl.moeilijkedingen.jellyfinaudioplayer")
-apple_id("lei@codified.nl")
-team_id("HD2D35G9Y4")
-json_key_file("./fastlane/play-store-credentials.json")
-itc_team_id("127114471")
+# Fork override (teh-hippo): re-keyed for io.tehhippo.fintunes / team 85JR4Y4DM6.
+# Upstream Play Store + iTC fields removed (we only ship iOS TestFlight on this fork).
+app_identifier("io.tehhippo.fintunes")
+team_id("85JR4Y4DM6")

@@ -1,0 +1,179 @@
+name: Release to TestFlight
+
+# Manual only. macOS runners are ~10x the cost of Linux. Every run is intentional.
+# Trigger with: gh workflow run release.yml
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  # Releases shouldn't cancel each other mid-upload — a half-uploaded build
+  # leaves TestFlight in a bad state. Better to queue.
+  cancel-in-progress: false
+
+env:
+  FASTLANE_SKIP_UPDATE_CHECK: true
+  FASTLANE_HIDE_CHANGELOG: true
+  # Tell every Sentry-touching tool to no-op (we have no Sentry org on this fork).
+  SENTRY_DISABLE_AUTO_UPLOAD: true
+
+jobs:
+  build-and-upload:
+    name: Build & Upload to TestFlight
+    # macos-26 has Xcode 26.x as default (with iOS 26 SDK).
+    # macos-latest is still macOS 14 with Xcode 16.4 (iOS 18.5 SDK), which
+    # Apple rejects at upload: "All iOS and iPadOS apps must be built with
+    # the iOS 26 SDK or later".
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          # Matches upstream's lint.yml/test.yml/build.yml. pnpm 11 doesn't
+          # honour .npmrc's `node-linker=hoisted`, which breaks jest's
+          # transformIgnorePatterns by exposing the .pnpm path in node_modules.
+          version: 10
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install Node dependencies
+        run: pnpm i
+
+      # Caches are restored explicitly here, and saved as a separate `if: always()`
+      # step after the build. That way a failed xcodebuild still seeds the cache for
+      # the next attempt — otherwise every retry pays the full pod install + Xcode
+      # cold-build cost (~5-15 min on macos-latest).
+      - name: Restore CocoaPods source cache
+        id: cache-cocoapods-src
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/Library/Caches/CocoaPods
+            ~/.cocoapods
+          key: ${{ runner.os }}-pods-src-${{ hashFiles('**/Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pods-src-
+
+      # The installed `ios/Pods/` directory. Keyed on Podfile.lock + patches/**
+      # so any change to native code triggers a re-install. `patches/` is included
+      # because pnpm `patchedDependencies` modify Swift sources that pods reference
+      # from node_modules without changing Podfile.lock's SPEC CHECKSUMS.
+      # `xcode26` prefix scopes the cache to the current toolchain.
+      - name: Restore installed Pods
+        id: cache-pods-installed
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ios/Pods
+            ios/Fintunes.xcworkspace
+          key: ${{ runner.os }}-xcode26-pods-installed-${{ hashFiles('**/Podfile.lock', 'patches/**') }}
+
+      - name: Install CocoaPods dependencies
+        # bundle exec to use the CocoaPods version pinned in Gemfile.lock
+        # rather than whatever's globally installed on the runner.
+        run: cd ios && bundle exec pod install
+
+      - name: Restore Xcode DerivedData
+        id: cache-deriveddata
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData
+          # `xcode26` prefix scopes the cache to the current toolchain. The
+          # cache from a Xcode 16.x build is not usable here — module hashes
+          # change between toolchains.
+          key: ${{ runner.os }}-xcode26-deriveddata-${{ hashFiles('src/**', 'index.js', 'app.json', 'babel.config.js', 'metro.config.js', 'react-native.config.js', 'scripts/**', 'package.json', 'pnpm-lock.yaml', 'ios/Podfile', 'ios/Podfile.lock', 'ios/.xcode.env', 'ios/Fintunes.xcodeproj/project.pbxproj', 'ios/Fintunes/**', 'patches/**') }}
+          restore-keys: |
+            ${{ runner.os }}-xcode26-deriveddata-
+
+      # Import Apple Distribution certificate into a temporary keychain.
+      # Matches the hippo-ssh recipe.
+      - name: Import signing certificate
+        env:
+          P12_BASE64: ${{ secrets.APPLE_DISTRIBUTION_P12 }}
+          P12_PASSWORD: ${{ secrets.APPLE_P12_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          echo "$P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" \
+            -P "$P12_PASSWORD" \
+            -A -t cert -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+
+          security set-key-partition-list -S apple-tool:,apple: \
+            -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+      - name: Install provisioning profile
+        env:
+          PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
+          PROFILE_UUID: ${{ secrets.APPLE_PROVISIONING_PROFILE_UUID }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          echo "$PROFILE_BASE64" | base64 --decode \
+            > "$HOME/Library/MobileDevice/Provisioning Profiles/${PROFILE_UUID}.mobileprovision"
+
+      - name: Build IPA and upload to TestFlight
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          # Named *_CONTENT to avoid colliding with fastlane's own
+          # APP_STORE_CONNECT_API_KEY env (which it uses for the JSON hash,
+          # not raw p8 text). Fastfile reads APP_STORE_CONNECT_API_KEY_CONTENT.
+          APP_STORE_CONNECT_API_KEY_CONTENT: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_PROVISIONING_PROFILE_UUID: ${{ secrets.APPLE_PROVISIONING_PROFILE_UUID }}
+        run: bundle exec fastlane ios teh_hippo_beta
+
+      # Save caches even on build failure so the next attempt starts warmer.
+      # Without this, actions/cache@v4 skips post-save when any prior step fails,
+      # and every retry restarts from a cold pod install + cold Xcode build.
+      - name: Save CocoaPods source cache
+        if: always() && steps.cache-cocoapods-src.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/Library/Caches/CocoaPods
+            ~/.cocoapods
+          key: ${{ steps.cache-cocoapods-src.outputs.cache-primary-key }}
+
+      - name: Save installed Pods
+        if: always() && steps.cache-pods-installed.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ios/Pods
+            ios/Fintunes.xcworkspace
+          key: ${{ steps.cache-pods-installed.outputs.cache-primary-key }}
+
+      - name: Save Xcode DerivedData
+        if: always() && steps.cache-deriveddata.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData
+          key: ${{ steps.cache-deriveddata.outputs.cache-primary-key }}
+
+      - name: Clean up keychain
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db" 2>/dev/null || true
